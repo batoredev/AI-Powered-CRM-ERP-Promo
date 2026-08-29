@@ -4,3 +4,7 @@ compatibility_flags = ["nodejs_compat"]
 
 [vars]
 ENVIRONMENT = "development"
+
+[[hyperdrive]]
+binding = "HYPERDRIVE"
+id = "ad7c15ef18114a7aa90f175f88dd3f24"
