@@ -1,0 +1,9 @@
+.tmp/
+.claude-backup-before-os/
+.env
+.env.*
+credentials.json
+token.json
+.claude-flow/
+.claude/proven-config.json
+.claude/.proven-config-version
