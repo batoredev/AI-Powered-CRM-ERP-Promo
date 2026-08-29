@@ -7,3 +7,7 @@ token.json
 .claude-flow/
 .claude/proven-config.json
 .claude/.proven-config-version
+node_modules/
+.next/
+.vercel/
+.wrangler/
