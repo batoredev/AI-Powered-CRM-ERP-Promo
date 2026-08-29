@@ -1,7 +1,7 @@
 {
   "name": "ai-crm-erp",
   "version": "1.0.0",
-  "description": "A 31-agent Claude Code **agent teams** setup for a software solutions company. Roles, rules, quality-gate hooks, mission templates, and a deterministic tools layer.",
+  "description": "AI-powered multi-tenant CRM and ERP platform with Next.js, TypeScript, and Cloudflare Pages",
   "main": "index.js",
   "directories": {
     "doc": "docs"
@@ -11,8 +11,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "pages:build": "node cloudflare-build.js",
-    "pages:dev": "wrangler pages dev .vercel/output/static --compatibility-flag=nodejs_compat",
+    "pages:build": "opennextjs-cloudflare build",
+    "pages:dev": "opennextjs-cloudflare preview",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -32,10 +32,11 @@
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
-    "@cloudflare/next-on-pages": "^1.13.16",
+    "@opennextjs/cloudflare": "^1.20.4",
     "@types/node": "^26.4.0",
     "@types/react": "^19.2.18",
     "typescript": "^5.9.3",
+    "vercel": "^59.10.0",
     "wrangler": "^4.127.1"
   }
 }
