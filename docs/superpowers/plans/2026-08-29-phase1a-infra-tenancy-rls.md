@@ -33,7 +33,18 @@
 - Create: `.gitignore` (extend existing root `.gitignore` — do not overwrite; append Next.js-specific entries)
 
 **Interfaces:**
-- Produces: a running Next.js dev server (`npm run dev`) and a Cloudflare Pages-compatible build (`npm run build` via `@cloudflare/next-on-pages`), both verifiable locally before any later task depends on them.
+- Produces: a running Next.js dev server (`npm run dev`) and a Cloudflare Workers-compatible build (`npm run build` via `@opennextjs/cloudflare`), both verifiable locally before any later task depends on them.
+
+**Amendment (execution ruling, fix round 1, Task 1):** the plan originally
+specified `@cloudflare/next-on-pages`. During execution, this package's
+own compiled code (`spawn('npx', ...)` internally) was found to fail with
+`ENOENT` on Windows/Git Bash — a genuine, non-workaroundable platform
+incompatibility, not an implementer error. Verified via web research that
+`@cloudflare/next-on-pages` is officially deprecated; Cloudflare's own
+recommended replacement is `@opennextjs/cloudflare`, which also runs the
+full Node.js runtime (not Edge-only) — a better fit for this project's
+later use of the Anthropic SDK, KMS, and WASM sandboxing. Steps 3, 5, and
+7 below are updated accordingly.
 
 - [ ] **Step 1: Initialize the Next.js project**
 
@@ -51,7 +62,7 @@ Open `tsconfig.json` and confirm `"strict": true` is present under `compilerOpti
 
 Run:
 ```bash
-npm install --save-dev @cloudflare/next-on-pages wrangler
+npm install --save-dev @opennextjs/cloudflare wrangler
 ```
 
 - [ ] **Step 4: Create `wrangler.toml`**
@@ -69,8 +80,15 @@ ENVIRONMENT = "development"
 
 Add to the `"scripts"` section:
 ```json
-"pages:build": "npx @cloudflare/next-on-pages",
-"pages:dev": "wrangler pages dev .vercel/output/static --compatibility-flag=nodejs_compat"
+"pages:build": "opennextjs-cloudflare build",
+"pages:dev": "opennextjs-cloudflare preview"
+```
+
+Also create the required OpenNext config file, `open-next.config.ts`, at the repo root:
+```typescript
+import { defineCloudflareConfig } from '@opennextjs/cloudflare';
+
+export default defineCloudflareConfig();
 ```
 
 - [ ] **Step 6: Verify the dev server runs**
@@ -81,7 +99,7 @@ Expected: server starts on `http://localhost:3000` with no errors. Stop the serv
 - [ ] **Step 7: Verify the Cloudflare build succeeds**
 
 Run: `npm run pages:build`
-Expected: build completes with no errors, producing `.vercel/output/static`.
+Expected: build completes with no errors, producing a Cloudflare Workers-compatible output directory (`.open-next/` by default) — confirm this is genuinely Cloudflare-adapted output, not a generic build, by checking for the Workers-specific entrypoint the tool generates (e.g. `.open-next/worker.js` or equivalent — check the actual output structure `@opennextjs/cloudflare` produces at the installed version, since exact paths can shift between versions).
 
 - [ ] **Step 8: Extend `.gitignore`**
 
