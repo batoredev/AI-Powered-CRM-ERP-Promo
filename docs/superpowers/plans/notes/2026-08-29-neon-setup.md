@@ -33,3 +33,10 @@ account-setup step for whoever has repo admin access on GitHub — not
 completed as part of Task 2/8, flagged for follow-up before Task 8's CI
 workflow can actually run in GitHub Actions (it will still commit and be
 correct locally, just won't pass in CI until these secrets exist).
+
+Task 8 update (`.github/workflows/ci.yml` added): CI requires its own
+Neon branch/database with migrations 0001-0002 (and later) applied, and
+its connection strings + a test JWT secret added as GitHub Actions
+repository secrets: `CI_DATABASE_URL`, `CI_APP_RUNTIME_DATABASE_URL`,
+`CI_SESSION_JWT_SECRET`. This is an account-setup step for whoever has
+repo admin access, not automatable from this plan.
