@@ -209,7 +209,18 @@ BEGIN
 END
 $$;
 
-GRANT CONNECT ON DATABASE current_database() TO app_runtime;
+-- GRANT ... ON DATABASE requires a literal database-name identifier, not
+-- a function-call expression — current_database() cannot be used
+-- directly here. Resolve it dynamically instead (execution correction,
+-- Task 3 fix round: verified this is a genuine Postgres grammar
+-- limitation, not implementer error; the fix below preserves identical
+-- resulting privileges — CONNECT on the current database, to
+-- app_runtime, nothing more).
+DO $$
+BEGIN
+  EXECUTE format('GRANT CONNECT ON DATABASE %I TO app_runtime', current_database());
+END
+$$;
 GRANT USAGE ON SCHEMA public TO app_runtime;
 
 -- Tenant context is set via SET LOCAL inside each transaction — never at
