@@ -27,6 +27,7 @@
   },
   "homepage": "https://github.com/batoredev/AI-Powered-CRM-ERP-Promo#readme",
   "dependencies": {
+    "jose": "^6.2.10",
     "next": "^15.5.2",
     "postgres": "^3.4.9",
     "react": "^19.2.8",
