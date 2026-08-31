@@ -35,7 +35,7 @@ describe('pipeline_stage tenant isolation', () => {
   it('the UNIQUE(tenant_id, name) constraint allows the same stage name across different tenants', async () => {
     // Both tenant A and tenant B have a 'Lead' stage — proves the unique
     // constraint is tenant-scoped, not global.
-    const rows = await setupSql`SELECT tenant_id, name FROM pipeline_stage WHERE name = 'Lead'`;
+    const rows = await setupSql`SELECT tenant_id, name FROM pipeline_stage WHERE name = 'Lead' AND tenant_id IN (${tenantAId}, ${tenantBId})`;
     expect(rows).toHaveLength(2);
   });
 });
