@@ -74,14 +74,22 @@ export async function listDealsByStage(tenantId: string): Promise<Record<string,
   });
 }
 
-export async function moveDealToStage(tenantId: string, dealId: string, stageId: string): Promise<Deal> {
+/**
+ * Moves a deal to a different pipeline stage.
+ *
+ * Returns `null` when the UPDATE matches zero rows — either the deal id
+ * doesn't exist, or it belongs to a different tenant and RLS makes it
+ * invisible to this transaction. Callers must handle the null case rather
+ * than assume the deal was found.
+ */
+export async function moveDealToStage(tenantId: string, dealId: string, stageId: string): Promise<Deal | null> {
   return withTenant(tenantId, async (tx) => {
-    const [row] = await tx`
+    const rows = await tx`
       UPDATE deal SET pipeline_stage_id = ${stageId}, updated_at = now()
       WHERE id = ${dealId}
       RETURNING *
     `;
-    return rowToDeal(row);
+    return rows.length > 0 ? rowToDeal(rows[0]) : null;
   });
 }
 

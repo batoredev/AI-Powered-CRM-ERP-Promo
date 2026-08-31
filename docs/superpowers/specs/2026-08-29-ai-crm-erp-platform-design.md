@@ -802,6 +802,14 @@ architecture's isolation goals rather than requiring a big-bang release.
   lock-timeout duration (§5a, §7, §7 concurrency fix) — illustrative
   values given in this doc, final numbers are a plan-phase/business
   decision.
+- **Still open as of Phase 2A (2026-08-31):** §8's append-only
+  history/versioning requirement for `deal`, `order`, and `invoice` has
+  not been implemented — Phase 2A shipped `deal` with current-row state
+  only (`moveDealToStage` overwrites `pipeline_stage_id` in place with no
+  transition history). Flagged in `db/migrations/0005_deal.sql` so it
+  isn't lost; still deferred to a later phase (Phase 3 ERP or a dedicated
+  hardening pass) since full column-level design was always out of scope
+  for the design phase.
 
 ## 11. Review Team Findings (2026-08-29, round 4)
 
