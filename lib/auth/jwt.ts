@@ -24,11 +24,23 @@ export async function signSessionToken(claims: SessionClaims): Promise<string> {
     .sign(getSecret());
 }
 
+const VALID_ROLES: ReadonlyArray<SessionClaims['role']> = ['owner', 'admin', 'agent'];
+
 export async function verifySessionToken(token: string): Promise<SessionClaims> {
   const { payload } = await jwtVerify(token, getSecret());
-  return {
-    userId: payload.userId as string,
-    tenantId: payload.tenantId as string,
-    role: payload.role as SessionClaims['role'],
-  };
+
+  // jwtVerify only guarantees signature integrity, not payload shape —
+  // validate the claims we actually rely on before trusting them.
+  const { userId, tenantId, role } = payload;
+  if (typeof userId !== 'string' || userId.length === 0) {
+    throw new Error('Invalid session token claims');
+  }
+  if (typeof tenantId !== 'string' || tenantId.length === 0) {
+    throw new Error('Invalid session token claims');
+  }
+  if (typeof role !== 'string' || !VALID_ROLES.includes(role as SessionClaims['role'])) {
+    throw new Error('Invalid session token claims');
+  }
+
+  return { userId, tenantId, role: role as SessionClaims['role'] };
 }
