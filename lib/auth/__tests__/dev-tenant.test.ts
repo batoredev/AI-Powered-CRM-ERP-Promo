@@ -23,7 +23,7 @@ describe('getDevTenantId', () => {
   });
 });
 
-describe('getDevTenantId production guard', () => {
+describe('getDevTenantId fail-closed NODE_ENV guard', () => {
   beforeEach(() => {
     vi.resetModules();
   });
@@ -38,6 +38,18 @@ describe('getDevTenantId production guard', () => {
     // devSqlInstance/cachedDevTenantId singletons from the describe block
     // above cannot mask the guard — this call must fail on its own.
     const { getDevTenantId: freshGetDevTenantId } = await import('../dev-tenant');
-    await expect(freshGetDevTenantId()).rejects.toThrow(/must never run in production/);
+    await expect(freshGetDevTenantId()).rejects.toThrow(/must only run in development or test/);
+  });
+
+  it('throws for an unexpected NODE_ENV value like "staging" (fail-closed, not just production)', async () => {
+    vi.stubEnv('NODE_ENV', 'staging');
+    const { getDevTenantId: freshGetDevTenantId } = await import('../dev-tenant');
+    await expect(freshGetDevTenantId()).rejects.toThrow(/must only run in development or test/);
+  });
+
+  it('throws when NODE_ENV is unset (fail-closed default, not fail-open)', async () => {
+    vi.stubEnv('NODE_ENV', undefined);
+    const { getDevTenantId: freshGetDevTenantId } = await import('../dev-tenant');
+    await expect(freshGetDevTenantId()).rejects.toThrow(/must only run in development or test/);
   });
 });

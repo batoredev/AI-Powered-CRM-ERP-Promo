@@ -41,12 +41,12 @@ let cachedDevTenantId: string | null = null;
 let devSqlInstance: postgres.Sql | null = null;
 
 function getDevSql(): postgres.Sql {
-  if (process.env.NODE_ENV === 'production') {
+  if (process.env.NODE_ENV !== 'development' && process.env.NODE_ENV !== 'test') {
     throw new Error(
-      'getDevTenantId() must never run in production — this dev-only tenant ' +
-      'bootstrap path uses privileged database access with no auth check. ' +
-      'If you are seeing this in production, a call site was not migrated ' +
-      'to real auth before deploy.'
+      'getDevTenantId() must only run in development or test environments — this ' +
+      'dev-only tenant bootstrap path uses privileged database access with no auth ' +
+      'check. Refusing to run because NODE_ENV is ' +
+      JSON.stringify(process.env.NODE_ENV) + '.'
     );
   }
   if (!devSqlInstance) {

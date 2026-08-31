@@ -9,8 +9,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <Link href="/contacts" className={styles.navLink}>
           Contacts
         </Link>
-        <Link href="/pipeline" className={styles.navLink}>
-          Pipeline
+        <Link href="/pipeline" className={`${styles.navLink} ${styles.navLinkDisabled}`}>
+          Pipeline <span className={styles.navLinkSoon}>(soon)</span>
         </Link>
       </nav>
       <main className={styles.content}>{children}</main>

@@ -35,6 +35,24 @@
   color: var(--color-text);
 }
 
+/* Pipeline ships in Phase 2B-2 — route doesn't exist yet. Kept as a real
+   Link (clicking through to a 404 is acceptable) but visually muted so it
+   reads as "not ready" rather than "broken". */
+.navLinkDisabled {
+  color: var(--color-text-muted);
+  opacity: 0.6;
+}
+
+.navLinkDisabled:hover {
+  background: transparent;
+  color: var(--color-text-muted);
+}
+
+.navLinkSoon {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-normal);
+}
+
 .content {
   flex: 1;
   padding: var(--space-6) var(--space-8);
