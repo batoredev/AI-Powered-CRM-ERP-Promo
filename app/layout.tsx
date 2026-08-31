@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { AppShell } from "./components/AppShell";
+import "./tokens.css";
 
 export const metadata: Metadata = {
   title: "AI CRM+ERP Platform",
@@ -12,7 +14,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <AppShell>{children}</AppShell>
+      </body>
     </html>
   );
 }
