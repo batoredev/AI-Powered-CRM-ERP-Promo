@@ -1,4 +1,4 @@
-import { describe, it, expect, afterAll } from 'vitest';
+import { describe, it, expect, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import postgres from 'postgres';
 import { getDevTenantId } from '../dev-tenant';
 
@@ -20,5 +20,24 @@ describe('getDevTenantId', () => {
     const first = await getDevTenantId();
     const second = await getDevTenantId();
     expect(first).toBe(second);
+  });
+});
+
+describe('getDevTenantId production guard', () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('throws immediately when NODE_ENV is production, before touching the database', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    // Fresh module instance (via resetModules) so the module-level
+    // devSqlInstance/cachedDevTenantId singletons from the describe block
+    // above cannot mask the guard — this call must fail on its own.
+    const { getDevTenantId: freshGetDevTenantId } = await import('../dev-tenant');
+    await expect(freshGetDevTenantId()).rejects.toThrow(/must never run in production/);
   });
 });
