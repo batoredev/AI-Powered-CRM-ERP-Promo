@@ -1,0 +1,24 @@
+.name {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  margin: 0 0 var(--space-5) 0;
+}
+
+.details {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: var(--space-2) var(--space-4);
+}
+
+.details dt {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.details dd {
+  margin: 0;
+}
+
+.notFound {
+  color: var(--color-text-muted);
+}

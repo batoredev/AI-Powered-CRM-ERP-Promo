@@ -10,6 +10,9 @@ export default async function ContactsPage() {
   return (
     <div>
       <h1 className={styles.heading}>Contacts</h1>
+      <Link href="/contacts/new" className={styles.newButton}>
+        + New Contact
+      </Link>
       {contacts.length === 0 ? (
         <p className={styles.emptyState}>No contacts yet. Add your first contact to get started.</p>
       ) : (

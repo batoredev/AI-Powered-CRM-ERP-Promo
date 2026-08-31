@@ -4,6 +4,22 @@
   margin: 0 0 var(--space-5) 0;
 }
 
+.newButton {
+  display: inline-block;
+  margin-bottom: var(--space-4);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-primary-contrast);
+  background: var(--color-primary);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+}
+
+.newButton:hover {
+  background: var(--color-primary-hover);
+}
+
 .emptyState {
   color: var(--color-text-muted);
   padding: var(--space-6);
