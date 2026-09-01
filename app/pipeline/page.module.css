@@ -1,0 +1,52 @@
+/* app/pipeline/page.module.css */
+.heading {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  margin: 0 0 var(--space-5) 0;
+}
+
+.board {
+  display: flex;
+  gap: var(--space-4);
+  align-items: flex-start;
+  overflow-x: auto;
+}
+
+.column {
+  flex: 0 0 260px;
+  background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.columnHeading {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  margin: 0;
+  padding: 0 var(--space-1);
+}
+
+.cardList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-height: 40px;
+}
+
+.card {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  box-shadow: var(--shadow-sm);
+}
+
+.cardTitle {
+  margin: 0 0 var(--space-2) 0;
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-sm);
+}
