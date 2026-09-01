@@ -35,4 +35,20 @@ describe('tenant_erp_settings data access', () => {
     expect(updated.goodsHandling).toBe('basic_stock');
     expect(updated.billingModes).toEqual(['transactional', 'recurring']);
   });
+
+  it('succeeds when called on a brand-new tenant without a prior getErpSettings call', async () => {
+    const [tenant] = await ownerSql`INSERT INTO tenant (name) VALUES ('ERP Settings Test Tenant 4') RETURNING id`;
+
+    const updated = await updateErpSettings(tenant.id, {
+      goodsHandling: 'production',
+      billingModes: ['effort_based'],
+    });
+
+    expect(updated.tenantId).toBe(tenant.id);
+    expect(updated.goodsHandling).toBe('production');
+    expect(updated.billingModes).toEqual(['effort_based']);
+
+    const rows = await ownerSql`SELECT * FROM tenant_erp_settings WHERE tenant_id = ${tenant.id}`;
+    expect(rows).toHaveLength(1);
+  });
 });

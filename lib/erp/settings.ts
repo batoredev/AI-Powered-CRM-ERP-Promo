@@ -39,8 +39,13 @@ export async function updateErpSettings(
   tenantId: string,
   input: { goodsHandling?: GoodsHandlingMode; billingModes?: BillingMode[] },
 ): Promise<ErpSettings> {
+  // Ensure the settings row exists before updating it. getErpSettings is
+  // idempotent and creates a default row on first access for this tenant,
+  // so updateErpSettings transparently works even if the caller never read
+  // settings first — matching getErpSettings's own documented contract.
+  await getErpSettings(tenantId);
+
   return withTenant(tenantId, async (tx) => {
-    await tx`SELECT 1 FROM tenant_erp_settings WHERE tenant_id = ${tenantId}`;
     const [row] = await tx`
       UPDATE tenant_erp_settings
       SET

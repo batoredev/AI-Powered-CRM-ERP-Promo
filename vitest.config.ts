@@ -8,6 +8,12 @@ loadDotenv({ path: '.env.local' });
 
 export default defineConfig({
   test: {
+    // 20s timeout (default is 5s) applies to both projects below via their
+    // `extends: true`. Neon's serverless Postgres has a cold-start penalty
+    // on the first query per connection that can exceed the 5s default,
+    // which otherwise fails the first test in every backend DB test file
+    // on a cold run (see final-review-report.md F2).
+    testTimeout: 20_000,
     // Vitest 4 replaced the separate `vitest.workspace.ts` file with an
     // inline `test.projects` array. Two projects run side by side:
     //  - "backend": existing db/lib tests, node environment, hits a real

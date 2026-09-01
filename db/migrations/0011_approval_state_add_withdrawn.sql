@@ -1,0 +1,16 @@
+-- db/migrations/0011_approval_state_add_withdrawn.sql
+-- Adds a terminal `withdrawn` value to approval_state (defined in
+-- 0007_approval_state.sql). ALTER TYPE ... ADD VALUE is the correct, safe
+-- way to extend a Postgres enum in place — it does not drop/recreate the
+-- type, so it cannot break any future column that references it, and it
+-- is a non-blocking, non-data-migrating operation since no table uses
+-- this type yet.
+--
+-- `withdrawn` covers a document that was retracted by its creator before
+-- a ruling was made on it. This is distinct from:
+--   - `rejected`: someone else (an approver) ruled against it. Conflating
+--     the two would corrupt any future approver-rejection-rate metric.
+--   - `draft`: moving a submitted document back to `draft` would lose the
+--     fact that it was ever submitted for approval, and would let it
+--     silently re-enter the approval queue as if it were new.
+ALTER TYPE approval_state ADD VALUE 'withdrawn';
