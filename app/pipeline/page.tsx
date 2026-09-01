@@ -1,6 +1,7 @@
 // app/pipeline/page.tsx
 import { listDealsByStage, listPipelineStages } from '../../lib/crm/deals';
 import { getDevTenantId } from '../../lib/auth/dev-tenant';
+import { DealCard } from './DealCard';
 import styles from './page.module.css';
 
 export default async function PipelinePage() {
@@ -26,9 +27,7 @@ export default async function PipelinePage() {
                 <h2 className={styles.columnHeading}>{stage.name}</h2>
                 <div className={styles.cardList}>
                   {deals.map((deal) => (
-                    <div key={deal.id} className={styles.card}>
-                      <p className={styles.cardTitle}>{deal.title}</p>
-                    </div>
+                    <DealCard key={deal.id} deal={deal} stages={stages} />
                   ))}
                 </div>
               </section>

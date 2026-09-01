@@ -37,20 +37,6 @@
   min-height: 40px;
 }
 
-.card {
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  padding: var(--space-3);
-  box-shadow: var(--shadow-sm);
-}
-
-.cardTitle {
-  margin: 0 0 var(--space-2) 0;
-  font-weight: var(--font-weight-medium);
-  font-size: var(--font-size-sm);
-}
-
 .emptyState {
   color: var(--color-text-muted);
   padding: var(--space-6);
