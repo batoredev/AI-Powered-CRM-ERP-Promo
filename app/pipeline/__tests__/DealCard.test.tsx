@@ -1,20 +1,9 @@
 // app/pipeline/__tests__/DealCard.test.tsx
-import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
-// This project's vitest config does not enable `test.globals`, so
-// @testing-library/react's automatic afterEach(cleanup) registration
-// (which checks for a global `afterEach`) never fires. Without explicit
-// cleanup, DOM from the first `it` block in this file persists into the
-// second, and getByRole('combobox', ...) matches two elements. Cleaning up
-// explicitly here keeps the fix scoped to this file rather than changing
-// project-wide vitest.setup.ts.
-afterEach(() => {
-  cleanup();
-});
-
-const moveDealActionMock = vi.fn();
+const moveDealActionMock = vi.fn().mockResolvedValue(undefined);
 vi.mock('../actions', () => ({
   moveDealAction: (...args: unknown[]) => moveDealActionMock(...args),
 }));

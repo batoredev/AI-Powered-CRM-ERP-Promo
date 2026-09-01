@@ -8,10 +8,14 @@ import styles from './DealCard.module.css';
 function formatValue(deal: Deal): string | null {
   if (deal.valueMinorUnits === null || !deal.currencyCode) return null;
   const amount = deal.valueMinorUnits / 100;
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: deal.currencyCode,
-  }).format(amount);
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: deal.currencyCode,
+    }).format(amount);
+  } catch {
+    return null;
+  }
 }
 
 export function DealCard({ deal, stages }: { deal: Deal; stages: PipelineStage[] }) {
@@ -20,7 +24,9 @@ export function DealCard({ deal, stages }: { deal: Deal; stages: PipelineStage[]
   function handleChange(event: React.ChangeEvent<HTMLSelectElement>) {
     const newStageId = event.target.value;
     if (newStageId === deal.pipelineStageId) return;
-    void moveDealAction(deal.id, newStageId);
+    moveDealAction(deal.id, newStageId).catch((err) => {
+      console.error('Failed to move deal:', err);
+    });
   }
 
   return (

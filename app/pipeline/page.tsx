@@ -23,8 +23,8 @@ export default async function PipelinePage() {
           {stages.map((stage) => {
             const deals = dealsByStage[stage.id] ?? [];
             return (
-              <section key={stage.id} className={styles.column}>
-                <h2 className={styles.columnHeading}>{stage.name}</h2>
+              <section key={stage.id} className={styles.column} aria-labelledby={`stage-${stage.id}`}>
+                <h2 id={`stage-${stage.id}`} className={styles.columnHeading}>{stage.name}</h2>
                 <div className={styles.cardList}>
                   {deals.map((deal) => (
                     <DealCard key={deal.id} deal={deal} stages={stages} />
