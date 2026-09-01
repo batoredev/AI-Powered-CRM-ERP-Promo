@@ -55,4 +55,14 @@ describe('PipelinePage', () => {
 
     expect(screen.getByText('Acme Renewal')).toBeInTheDocument();
   });
+
+  it('renders a friendly empty state when there are no pipeline stages yet', async () => {
+    (listPipelineStages as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (listDealsByStage as ReturnType<typeof vi.fn>).mockResolvedValue({});
+
+    const ui = await PipelinePage();
+    render(ui);
+
+    expect(screen.getByText(/no pipeline stages yet/i)).toBeInTheDocument();
+  });
 });

@@ -50,3 +50,11 @@
   font-weight: var(--font-weight-medium);
   font-size: var(--font-size-sm);
 }
+
+.emptyState {
+  color: var(--color-text-muted);
+  padding: var(--space-6);
+  text-align: center;
+  background: var(--color-bg-subtle);
+  border-radius: var(--radius-md);
+}

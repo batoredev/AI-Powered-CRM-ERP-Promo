@@ -13,23 +13,29 @@ export default async function PipelinePage() {
   return (
     <div>
       <h1 className={styles.heading}>Pipeline</h1>
-      <div className={styles.board}>
-        {stages.map((stage) => {
-          const deals = dealsByStage[stage.id] ?? [];
-          return (
-            <section key={stage.id} className={styles.column}>
-              <h2 className={styles.columnHeading}>{stage.name}</h2>
-              <div className={styles.cardList}>
-                {deals.map((deal) => (
-                  <div key={deal.id} className={styles.card}>
-                    <p className={styles.cardTitle}>{deal.title}</p>
-                  </div>
-                ))}
-              </div>
-            </section>
-          );
-        })}
-      </div>
+      {stages.length === 0 ? (
+        <p className={styles.emptyState}>
+          No pipeline stages yet. Pipeline stages and deals are created as you add them — check back once your first deal exists.
+        </p>
+      ) : (
+        <div className={styles.board}>
+          {stages.map((stage) => {
+            const deals = dealsByStage[stage.id] ?? [];
+            return (
+              <section key={stage.id} className={styles.column}>
+                <h2 className={styles.columnHeading}>{stage.name}</h2>
+                <div className={styles.cardList}>
+                  {deals.map((deal) => (
+                    <div key={deal.id} className={styles.card}>
+                      <p className={styles.cardTitle}>{deal.title}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
