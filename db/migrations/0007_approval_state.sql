@@ -1,0 +1,11 @@
+-- db/migrations/0007_approval_state.sql
+-- Shared enum for any document type with an external side effect,
+-- per design spec §2. Every future AI-creatable record (purchase
+-- orders, manufacturing orders, etc.) gets an `approval_state
+-- NOT NULL DEFAULT 'draft'` column using this type, so a Phase 5 agent
+-- action always defaults to the least-privileged state per
+-- .claude/rules/ai-systems.md's approval-gate requirement. No table
+-- in Phase 3A-1 uses this column yet — it is defined here so later
+-- sub-plans (procurement, production) reference one shared type
+-- instead of each redefining it.
+CREATE TYPE approval_state AS ENUM ('draft', 'pending_approval', 'approved', 'rejected');
