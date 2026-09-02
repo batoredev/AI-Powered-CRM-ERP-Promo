@@ -1,5 +1,6 @@
 import { withTenant } from '../db/with-tenant';
 import { nextDocumentNumber } from './document-sequence';
+import { recordStockMove } from './stock';
 
 export type PurchaseOrderStatus = 'draft' | 'submitted' | 'received' | 'cancelled';
 export type ApprovalState = 'draft' | 'pending_approval' | 'approved' | 'rejected' | 'withdrawn';
@@ -94,6 +95,38 @@ export async function submitPurchaseOrder(tenantId: string, id: string): Promise
       UPDATE purchase_order
       SET status = 'submitted', updated_at = now()
       WHERE id = ${id} AND status = 'draft'
+      RETURNING *
+    `;
+    return rows.length > 0 ? rowToPurchaseOrder(rows[0]) : null;
+  });
+}
+
+export async function receivePurchaseOrder(
+  tenantId: string,
+  purchaseOrderId: string,
+  locationId: string,
+): Promise<PurchaseOrder | null> {
+  const po = await getPurchaseOrder(tenantId, purchaseOrderId);
+  if (!po || po.status !== 'submitted') {
+    return null;
+  }
+
+  const lines = await listPurchaseOrderLines(tenantId, purchaseOrderId);
+  for (const line of lines) {
+    await recordStockMove(tenantId, {
+      productId: line.productId,
+      locationId,
+      quantity: line.quantity,
+      movementType: 'receipt',
+      reference: `PO #${po.documentNumber}`,
+    });
+  }
+
+  return withTenant(tenantId, async (tx) => {
+    const rows = await tx`
+      UPDATE purchase_order
+      SET status = 'received', updated_at = now()
+      WHERE id = ${purchaseOrderId} AND status = 'submitted'
       RETURNING *
     `;
     return rows.length > 0 ? rowToPurchaseOrder(rows[0]) : null;

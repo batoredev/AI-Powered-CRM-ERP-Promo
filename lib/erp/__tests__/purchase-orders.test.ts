@@ -3,6 +3,9 @@ import postgres from 'postgres';
 import { createPurchaseOrder, getPurchaseOrder, listPurchaseOrderLines, submitPurchaseOrder } from '../purchase-orders';
 import { createVendor } from '../vendors';
 import { createProduct } from '../products';
+import { receivePurchaseOrder } from '../purchase-orders';
+import { createLocation } from '../locations';
+import { getStockOnHand } from '../stock';
 
 const ownerSql = postgres(process.env.DATABASE_URL!);
 
@@ -66,6 +69,41 @@ describe('purchase order data access', () => {
   it('getPurchaseOrder returns null for a nonexistent id', async () => {
     const [tenant] = await ownerSql`INSERT INTO tenant (name) VALUES ('PO Test Tenant 4') RETURNING id`;
     const result = await getPurchaseOrder(tenant.id, '00000000-0000-0000-0000-000000000000');
+    expect(result).toBeNull();
+  });
+
+  it('receivePurchaseOrder creates stock moves for each line and increases on-hand quantity', async () => {
+    const [tenant] = await ownerSql`INSERT INTO tenant (name) VALUES ('PO Test Tenant 5') RETURNING id`;
+    const vendor = await createVendor(tenant.id, { name: 'Acme Supplies' });
+    const product = await createProduct(tenant.id, { name: 'Widget', productType: 'goods' });
+    const location = await createLocation(tenant.id, { name: 'Main Warehouse' });
+
+    const po = await createPurchaseOrder(tenant.id, {
+      vendorId: vendor.id,
+      lines: [{ productId: product.id, quantity: 25, unitPriceMinorUnits: 500, currencyCode: 'USD' }],
+    });
+    await submitPurchaseOrder(tenant.id, po.id);
+
+    const received = await receivePurchaseOrder(tenant.id, po.id, location.id);
+    expect(received).not.toBeNull();
+    expect(received!.status).toBe('received');
+
+    const onHand = await getStockOnHand(tenant.id, product.id, location.id);
+    expect(onHand).toBe(25);
+  });
+
+  it('receivePurchaseOrder returns null for a PO that is still in draft (never submitted)', async () => {
+    const [tenant] = await ownerSql`INSERT INTO tenant (name) VALUES ('PO Test Tenant 6') RETURNING id`;
+    const vendor = await createVendor(tenant.id, { name: 'Acme Supplies' });
+    const product = await createProduct(tenant.id, { name: 'Widget', productType: 'goods' });
+    const location = await createLocation(tenant.id, { name: 'Main Warehouse' });
+
+    const po = await createPurchaseOrder(tenant.id, {
+      vendorId: vendor.id,
+      lines: [{ productId: product.id, quantity: 5, unitPriceMinorUnits: 100, currencyCode: 'USD' }],
+    });
+
+    const result = await receivePurchaseOrder(tenant.id, po.id, location.id);
     expect(result).toBeNull();
   });
 });
