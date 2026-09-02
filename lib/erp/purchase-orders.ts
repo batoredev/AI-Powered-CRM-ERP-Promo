@@ -106,8 +106,17 @@ export async function receivePurchaseOrder(
   purchaseOrderId: string,
   locationId: string,
 ): Promise<PurchaseOrder | null> {
-  const po = await getPurchaseOrder(tenantId, purchaseOrderId);
-  if (!po || po.status !== 'submitted') {
+  const updatedPo = await withTenant(tenantId, async (tx) => {
+    const rows = await tx`
+      UPDATE purchase_order
+      SET status = 'received', updated_at = now()
+      WHERE id = ${purchaseOrderId} AND status = 'submitted'
+      RETURNING *
+    `;
+    return rows.length > 0 ? rowToPurchaseOrder(rows[0]) : null;
+  });
+
+  if (!updatedPo) {
     return null;
   }
 
@@ -118,17 +127,9 @@ export async function receivePurchaseOrder(
       locationId,
       quantity: line.quantity,
       movementType: 'receipt',
-      reference: `PO #${po.documentNumber}`,
+      reference: `PO #${updatedPo.documentNumber}`,
     });
   }
 
-  return withTenant(tenantId, async (tx) => {
-    const rows = await tx`
-      UPDATE purchase_order
-      SET status = 'received', updated_at = now()
-      WHERE id = ${purchaseOrderId} AND status = 'submitted'
-      RETURNING *
-    `;
-    return rows.length > 0 ? rowToPurchaseOrder(rows[0]) : null;
-  });
+  return updatedPo;
 }

@@ -106,4 +106,32 @@ describe('purchase order data access', () => {
     const result = await receivePurchaseOrder(tenant.id, po.id, location.id);
     expect(result).toBeNull();
   });
+
+  it('receivePurchaseOrder is race-safe: two concurrent calls on the same submitted PO produce exactly one stock_move per line, not two', async () => {
+    const [tenant] = await ownerSql`INSERT INTO tenant (name) VALUES ('PO Test Tenant 7') RETURNING id`;
+    const vendor = await createVendor(tenant.id, { name: 'Acme Supplies' });
+    const product = await createProduct(tenant.id, { name: 'Widget', productType: 'goods' });
+    const location = await createLocation(tenant.id, { name: 'Main Warehouse' });
+
+    const po = await createPurchaseOrder(tenant.id, {
+      vendorId: vendor.id,
+      lines: [{ productId: product.id, quantity: 25, unitPriceMinorUnits: 500, currencyCode: 'USD' }],
+    });
+    await submitPurchaseOrder(tenant.id, po.id);
+
+    const [resultA, resultB] = await Promise.all([
+      receivePurchaseOrder(tenant.id, po.id, location.id),
+      receivePurchaseOrder(tenant.id, po.id, location.id),
+    ]);
+
+    const results = [resultA, resultB];
+    const succeeded = results.filter((r) => r !== null);
+    const failed = results.filter((r) => r === null);
+    expect(succeeded).toHaveLength(1);
+    expect(failed).toHaveLength(1);
+    expect(succeeded[0]!.status).toBe('received');
+
+    const onHand = await getStockOnHand(tenant.id, product.id, location.id);
+    expect(onHand).toBe(25);
+  });
 });
