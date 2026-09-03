@@ -1,6 +1,6 @@
 import { withTenant } from '../db/with-tenant';
 import { nextDocumentNumber } from './document-sequence';
-import { recordStockMove } from './stock';
+import { getLocation } from './locations';
 
 export type PurchaseOrderStatus = 'draft' | 'submitted' | 'received' | 'cancelled';
 export type ApprovalState = 'draft' | 'pending_approval' | 'approved' | 'rejected' | 'withdrawn';
@@ -106,30 +106,43 @@ export async function receivePurchaseOrder(
   purchaseOrderId: string,
   locationId: string,
 ): Promise<PurchaseOrder | null> {
-  const updatedPo = await withTenant(tenantId, async (tx) => {
+  // F1: validate the location belongs to this tenant BEFORE touching the PO
+  // at all. getLocation runs under withTenant/RLS, so a cross-tenant or
+  // nonexistent locationId comes back null here — rejected before any
+  // state changes happen.
+  const location = await getLocation(tenantId, locationId);
+  if (!location) {
+    return null;
+  }
+
+  // F3: the status flip, the line read, and every stock_move insert now
+  // share one transaction, so this either fully commits or fully rolls
+  // back — no more partial "received but under-stocked" states.
+  return withTenant(tenantId, async (tx) => {
     const rows = await tx`
       UPDATE purchase_order
       SET status = 'received', updated_at = now()
       WHERE id = ${purchaseOrderId} AND status = 'submitted'
       RETURNING *
     `;
-    return rows.length > 0 ? rowToPurchaseOrder(rows[0]) : null;
+    if (rows.length === 0) {
+      return null;
+    }
+    const updatedPo = rowToPurchaseOrder(rows[0]);
+
+    const lineRows = await tx`SELECT * FROM purchase_order_line WHERE purchase_order_id = ${purchaseOrderId} ORDER BY id`;
+    const lines = lineRows.map(rowToPurchaseOrderLine);
+
+    for (const line of lines) {
+      // Inlined stock_move INSERT (same shape as recordStockMove in
+      // lib/erp/stock.ts) so it runs inside this shared transaction rather
+      // than recordStockMove's own withTenant call opening a separate one.
+      await tx`
+        INSERT INTO stock_move (tenant_id, product_id, location_id, source_location_id, quantity, movement_type, reference)
+        VALUES (${tenantId}, ${line.productId}, ${locationId}, ${null}, ${line.quantity}, ${'receipt'}, ${`PO #${updatedPo.documentNumber}`})
+      `;
+    }
+
+    return updatedPo;
   });
-
-  if (!updatedPo) {
-    return null;
-  }
-
-  const lines = await listPurchaseOrderLines(tenantId, purchaseOrderId);
-  for (const line of lines) {
-    await recordStockMove(tenantId, {
-      productId: line.productId,
-      locationId,
-      quantity: line.quantity,
-      movementType: 'receipt',
-      reference: `PO #${updatedPo.documentNumber}`,
-    });
-  }
-
-  return updatedPo;
 }
