@@ -66,37 +66,88 @@ deploy pipeline, propagated to every client's instance automatically.
 
 ### 2.1 Deployment topology
 
+**Revised 2026-09-05 — database ownership moved to the client.** The original
+design (below, kept for the record) had us provisioning a Neon project per
+client, under our own account. That hit a real wall: the working Neon account
+has a **Projects Limit: 0** on its current plan, unable to create a second
+project at all. Rather than treat that as a plan-doc-only workaround, the user
+made a deliberate ownership decision (2026-09-05, via brainstorming):
+**each client creates and owns their own Supabase project — their account,
+their billing, their credentials.** They hand us a connection string / a
+service-role key; we never touch their Supabase billing relationship.
+
 ```
                      +-------------------------------+
                      |   Golden codebase (this repo)  |
                      |   -- single source of truth    |
                      +----------------+----------------+
                                       |
-                     provision-client.ts (idempotent)
+                     provision-client.ts (idempotent;
+                     takes a client-supplied DB connection
+                     string as input, does not create the DB)
                                       |
         +-----------------+----------+----------+-----------------+
         v                 v                     v                 v
   +-----------+     +-----------+         +-----------+     +-----------+
   | Client A  |     | Client B  |   ...   | Client N  |     |  (new)    |
   | Worker    |     | Worker    |         | Worker    |     | provision |
-  | Neon DB   |     | Neon DB   |         | Neon DB   |     | on demand |
+  | Client's  |     | Client's  |         | Client's  |     | on demand |
+  | own       |     | own       |         | own       |     |           |
+  | Supabase  |     | Supabase  |         | Supabase  |     |           |
   | manifest  |     | manifest  |         | manifest  |     |           |
   | own domain|     | own domain|         | own domain|     |           |
   +-----------+     +-----------+         +-----------+     +-----------+
 ```
 
-- **Compute:** Cloudflare Workers (current platform, via OpenNext), one Worker per
-  client.
-- **Database:** Neon Postgres, one project per client. Scale-to-zero keeps idle
-  clients near-zero cost — this is the mechanism that makes per-client databases
-  economically viable at all (contrast an always-on-VM provider, which would cost
-  roughly $1,000/mo for 100 small tenants per the research).
+- **Compute:** Cloudflare Workers (current platform, via OpenNext), one Worker
+  per client. Unaffected by the database-ownership change — still our infra.
+  **Forward-looking note (not designed yet, flagged by the user 2026-09-05):**
+  compute may move from Cloudflare Workers to a self-hosted VPS at some future
+  point. This is a separate, later decision — noted here so it isn't lost, not
+  scoped or designed as part of this revision.
+- **Database:** each client's own Supabase project (Postgres-compatible —
+  same engine Neon uses, so the existing schema/RLS/`withTenant()` pattern
+  carries over unchanged; see 2.1.1). **Onboarding now has a new manual step:**
+  a client must create their Supabase account and hand us a connection string
+  before `provision-client.ts` can run against it — this replaces the fully
+  automated "we create the database ourselves" step the original Neon design
+  had. `provision-client.ts` still runs the migrations and RLS setup remotely
+  once it has that connection string (§3.1).
 - **Domain:** one custom domain or subdomain per client, DNS + SSL automated
   through the provisioning script.
 - **Schema:** every client runs the *same* migration set (all tables always
   exist). A disabled feature means unused tables, not absent ones — this is what
   keeps the codebase genuinely shared and updatable, and avoids the worst failure
   mode found in research (per-client schema drift).
+
+#### 2.1.1 What does and doesn't change with this switch
+
+- **Unaffected:** all existing schema, `FORCE ROW LEVEL SECURITY` +
+  `tenant_isolation` policies, `current_tenant_id()`, and the `withTenant()`
+  `SET LOCAL`-per-transaction pattern — Supabase is standard Postgres, so none
+  of this needed redesigning, only confirming (per the user's explicit
+  decision to keep the RLS approach as-is rather than adopt Supabase's own
+  `auth.uid()`-based conventions).
+- **Unaffected:** the existing Neon project (`AI CRM-ERP-Promo`) stays exactly
+  as it is — the developer's own dev/test database (`DATABASE_URL` in
+  `.env`). This switch only changes what *client* databases run on, not the
+  dev workflow.
+- **Unaffected:** the offline dev-page tool (§3.5), the feature-manifest shape
+  (§2.3), and the AI-automation roadmap (§4) — none of these are
+  database-provider-specific.
+- **Changed:** §3.1's `provision-client.ts` no longer creates the database
+  itself — it takes a connection string as input (see revised §3.1).
+- **Changed:** onboarding a new client now requires them to complete a
+  Supabase signup step before provisioning can start — this plan does not yet
+  specify the exact hand-off mechanism (a form, an email, a dashboard) and
+  that detail is deferred to implementation, not designed here.
+
+**Original design, for the record (superseded by the above):** we would
+provision a Neon Postgres project per client under our own account,
+leveraging Neon's scale-to-zero pricing to keep idle-client cost near zero
+(contrast an always-on-VM provider, which would cost roughly $1,000/mo for
+100 small tenants per the research). This is no longer the plan for
+client databases; Neon remains only as the dev/test database.
 
 ### 2.2 The known ceiling on this platform, planned around now
 
@@ -159,20 +210,28 @@ per client.
 
 ### 3.1 `tools/provision-client.ts` (new)
 
-Idempotent script, re-runnable safely. Given a client name and a feature-manifest
-selection:
+**Revised 2026-09-05 per §2.1's database-ownership change.** Idempotent
+script, re-runnable safely. Given a client name, a **client-supplied Supabase
+connection string** (obtained out-of-band — the client creates their own
+Supabase project and hands this to us; the exact hand-off channel is an
+implementation detail, not specified here), and a feature-manifest selection:
 
-1. Create a new Neon Postgres project for the client.
+1. **Does not create a database.** Connects to the client-supplied Supabase
+   connection string directly — the client already created and owns that
+   project.
 2. Run the full migration set against it (all 15+ migrations, unchanged — RLS
-   included).
+   included, per §2.1.1 confirming the existing RLS approach carries over
+   unchanged onto Supabase's Postgres).
 3. Insert the client's feature-manifest row.
 4. Create a Cloudflare Worker for the client (or a route within the existing
    Worker + custom domain, depending on the §2.2 ceiling — evaluate both options
    during implementation and pick based on the actual Cloudflare Workers-for-
-   Platforms pricing quote).
+   Platforms pricing quote). Unaffected by the database change.
 5. Attach the client's domain, verify SSL issuance.
 6. Write the client's connection secrets to the deploy environment (never into
    source control — per `.claude/rules/security.md`, "never hardcode secrets").
+   The client-supplied connection string is a secret from the moment we
+   receive it — same handling rule applies.
 7. Record the client in a central fleet registry (see 3.3).
 
 ### 3.2 `tools/deploy-update.ts` (new)
