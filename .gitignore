@@ -15,3 +15,7 @@ node_modules/
 .open-next/
 next-env.d.ts
 *.tsbuildinfo
+
+# dev-tools/client-config.html output — per-client generated manifests,
+# never committed to the shared repo (see dev-tools/README.md)
+/clients/

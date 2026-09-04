@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AI CRM-ERP — Client Config (DEV ONLY)</title>
+<meta name="robots" content="noindex, nofollow">
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: -apple-system, Segoe UI, sans-serif; background:#0f1115; color:#e6e6e6; margin:0; padding:0; }
+  .banner { background:#7a1f1f; color:#fff; text-align:center; padding:8px; font-weight:600; font-size:13px; letter-spacing:.03em; }
+  .wrap { max-width:720px; margin:40px auto; padding:0 20px; }
+  h1 { font-size:20px; margin-bottom:4px; }
+  .sub { color:#9aa0a6; font-size:13px; margin-bottom:24px; }
+  .gate { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:60vh; gap:16px; text-align:center; }
+  button { background:#2f6fed; color:#fff; border:none; border-radius:8px; padding:10px 18px; font-size:14px; cursor:pointer; }
+  button:hover { background:#255bc4; }
+  button.secondary { background:#2a2d35; }
+  button.secondary:hover { background:#363a44; }
+  .err { color:#ff6b6b; font-size:13px; min-height:18px; }
+  .card { background:#171a20; border:1px solid #2a2d35; border-radius:12px; padding:20px; margin-bottom:16px; }
+  .card h2 { font-size:15px; margin:0 0 12px; color:#e6e6e6; }
+  .field { margin-bottom:14px; }
+  .field label.title { display:block; font-size:13px; font-weight:600; margin-bottom:6px; }
+  .radio-row, .check-row { display:flex; gap:8px; flex-wrap:wrap; }
+  .opt { display:flex; align-items:center; gap:6px; background:#1a1d24; border:1px solid #2a2d35; border-radius:8px; padding:6px 12px; cursor:pointer; font-size:13px; }
+  .opt.on { border-color:#2f6fed; background:#16233f; }
+  .opt input { accent-color:#2f6fed; }
+  input[type=text] { width:100%; box-sizing:border-box; padding:9px 12px; border-radius:8px; border:1px solid #2a2d35; background:#1a1d24; color:#fff; font-size:14px; }
+  .status { font-size:12px; color:#9aa0a6; margin-top:6px; min-height:16px; }
+  .status.ok { color:#4caf7d; }
+  .status.err { color:#ff6b6b; }
+  .footer-row { display:flex; gap:10px; align-items:center; margin-top:8px; }
+  code { background:#1a1d24; padding:1px 6px; border-radius:4px; font-size:12px; }
+  #app { display:none; }
+</style>
+</head>
+<body>
+
+<div class="banner">DEV-ONLY TOOL — never bundled, never deployed. Runs locally against a folder you pick.</div>
+
+<div id="folder-gate" class="wrap">
+  <div class="gate">
+    <h1>AI CRM-ERP — Client Config</h1>
+    <p class="sub">Pick the local folder this tool will write client manifests into (e.g. a scratch <code>clients/</code> folder in this repo, or anywhere else on disk).</p>
+    <button onclick="openFolder()">Choose folder…</button>
+    <div class="err" id="folder-err"></div>
+    <p class="sub">Requires Chrome or Edge (File System Access API). Nothing is uploaded anywhere — this page never makes a network request.</p>
+  </div>
+</div>
+
+<div id="app" class="wrap">
+  <h1>Client Config</h1>
+  <p class="sub">Writing into: <code id="folder-name"></code>. Every change below regenerates the client's files on disk immediately.</p>
+
+  <div class="card">
+    <h2>Client</h2>
+    <div class="field">
+      <label class="title" for="clientName">Client name (used as the folder/slug)</label>
+      <input type="text" id="clientName" placeholder="e.g. acme-co" oninput="onChange()">
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Goods handling</h2>
+    <p class="sub" style="margin:-6px 0 12px;">Matches <code>tenant_erp_settings.goods_handling</code> (migration 0006) — a tenant is at one point on this spectrum.</p>
+    <div class="field radio-row" id="goodsHandlingRow"></div>
+  </div>
+
+  <div class="card">
+    <h2>Billing modes</h2>
+    <p class="sub" style="margin:-6px 0 12px;">Matches <code>tenant_erp_settings.billing_modes</code> — an array; a tenant can combine modes.</p>
+    <div class="field check-row" id="billingModesRow"></div>
+  </div>
+
+  <div class="footer-row">
+    <button onclick="generateNow()">Regenerate now</button>
+    <button class="secondary" onclick="openFolder()">Change folder…</button>
+    <div class="status" id="genStatus"></div>
+  </div>
+</div>
+
+<script>
+// ── FILE SYSTEM ACCESS API ────────────────────────────────────────────
+// Pattern verified against C:\Users\sriva\Desktop\AlpenGlow WEB\AlpenGlow work\AlpenGlow\dev.html
+// (independently re-read 2026-09-05, not just summarized) — same calls,
+// same shape: showDirectoryPicker -> getDirectoryHandle(...,{create:true})
+// per path segment -> getFileHandle(...,{create:true}) -> createWritable()
+// -> write() -> close().
+let dirHandle = null;
+
+async function openFolder() {
+  try {
+    dirHandle = await window.showDirectoryPicker({ mode: 'readwrite', id: 'ai-crm-erp-client-config' });
+    document.getElementById('folder-gate').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    document.getElementById('folder-name').textContent = dirHandle.name;
+    renderOptions();
+  } catch (err) {
+    if (err.name !== 'AbortError') {
+      document.getElementById('folder-err').textContent = 'Could not open folder: ' + err.message;
+    }
+  }
+}
+
+async function writeTextFile(path, text) {
+  const parts = path.split('/').filter(Boolean);
+  let dir = dirHandle;
+  for (let i = 0; i < parts.length - 1; i++) {
+    dir = await dir.getDirectoryHandle(parts[i], { create: true });
+  }
+  const fh = await dir.getFileHandle(parts[parts.length - 1], { create: true });
+  const w = await fh.createWritable();
+  await w.write(text);
+  await w.close();
+}
+
+// ── MANIFEST SHAPE ─────────────────────────────────────────────────
+// Deliberately scoped to what has real schema today: tenant_erp_settings
+// (migration 0006_tenant_erp_settings.sql) — goods_handling (single enum
+// value) and billing_modes (array). The CRM/AI/channels manifest sketched
+// conceptually in the deployment plan's §2.3 has no schema yet, so this
+// tool does not fabricate toggles for it (per the user's 2026-09-05
+// decision: "ERP axes only for now").
+const GOODS_HANDLING_OPTIONS = [
+  { value: 'off', label: 'Off', sub: 'no inventory/stock tracking' },
+  { value: 'basic_stock', label: 'Basic stock', sub: 'locations + stock_move ledger + purchase orders' },
+  { value: 'production', label: 'Production', sub: 'basic_stock + BoM, routing, manufacturing orders' },
+];
+const BILLING_MODE_OPTIONS = [
+  { value: 'transactional', label: 'Transactional', sub: 'one-off orders/invoices' },
+  { value: 'effort_based', label: 'Effort-based', sub: 'projects, tasks, time entries' },
+  { value: 'recurring', label: 'Recurring', sub: 'subscriptions' },
+];
+
+let state = { clientName: '', goodsHandling: 'off', billingModes: [] };
+
+function renderOptions() {
+  const gh = document.getElementById('goodsHandlingRow');
+  gh.innerHTML = GOODS_HANDLING_OPTIONS.map(o => `
+    <label class="opt ${state.goodsHandling === o.value ? 'on' : ''}" title="${o.sub}">
+      <input type="radio" name="goodsHandling" value="${o.value}" ${state.goodsHandling === o.value ? 'checked' : ''} onchange="setGoodsHandling('${o.value}')">
+      ${o.label}
+    </label>`).join('');
+
+  const bm = document.getElementById('billingModesRow');
+  bm.innerHTML = BILLING_MODE_OPTIONS.map(o => `
+    <label class="opt ${state.billingModes.includes(o.value) ? 'on' : ''}" title="${o.sub}">
+      <input type="checkbox" value="${o.value}" ${state.billingModes.includes(o.value) ? 'checked' : ''} onchange="toggleBillingMode('${o.value}')">
+      ${o.label}
+    </label>`).join('');
+}
+
+function setGoodsHandling(v) { state.goodsHandling = v; renderOptions(); onChange(); }
+function toggleBillingMode(v) {
+  const i = state.billingModes.indexOf(v);
+  if (i === -1) state.billingModes.push(v); else state.billingModes.splice(i, 1);
+  renderOptions();
+  onChange();
+}
+
+function onChange() {
+  state.clientName = document.getElementById('clientName').value.trim();
+  generateNow();
+}
+
+function slugify(name) {
+  return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'unnamed-client';
+}
+
+async function generateNow() {
+  const statusEl = document.getElementById('genStatus');
+  if (!dirHandle) return;
+  const slug = slugify(state.clientName);
+  if (!state.clientName) {
+    statusEl.textContent = 'Enter a client name to generate files.';
+    statusEl.className = 'status';
+    return;
+  }
+  try {
+    const manifest = {
+      client: state.clientName,
+      slug,
+      generatedAt: new Date().toISOString(),
+      erp: {
+        goodsHandling: state.goodsHandling,
+        billingModes: state.billingModes,
+      },
+    };
+    await writeTextFile(`clients/${slug}/manifest.json`, JSON.stringify(manifest, null, 2));
+
+    // seed.sql mirrors the exact tenant_erp_settings shape from migration 0006 —
+    // this is a template for provision-client.ts (§3.1 of the deployment plan)
+    // to run against the client's own database once it's provisioned; this tool
+    // does not connect to any database itself.
+    const billingArrayLiteral = '{' + state.billingModes.join(',') + '}';
+    const seedSql = `-- Generated by dev-tools/client-config.html for client "${state.clientName}" (${slug})
+-- Generated: ${manifest.generatedAt}
+-- Run this against the client's own provisioned database (see provision-client.ts,
+-- deployment plan §3.1) AFTER inserting the tenant row and getting its id.
+--
+-- INSERT INTO tenant_erp_settings (tenant_id, goods_handling, billing_modes)
+-- VALUES ('<tenant-id-here>', '${state.goodsHandling}', '${billingArrayLiteral}');
+`;
+    await writeTextFile(`clients/${slug}/seed.sql`, seedSql);
+
+    statusEl.textContent = `Wrote clients/${slug}/manifest.json and seed.sql`;
+    statusEl.className = 'status ok';
+  } catch (err) {
+    statusEl.textContent = 'Write failed: ' + err.message;
+    statusEl.className = 'status err';
+  }
+}
+</script>
+</body>
+</html>
