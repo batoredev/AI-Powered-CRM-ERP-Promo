@@ -86,11 +86,27 @@ export async function listOperations(tenantId: string, routingId: string): Promi
   });
 }
 
+export async function getRouting(tenantId: string, id: string): Promise<Routing | null> {
+  return withTenant(tenantId, async (tx) => {
+    const rows = await tx`SELECT * FROM routing WHERE id = ${id}`;
+    return rows.length > 0 ? rowToRouting(rows[0]) : null;
+  });
+}
+
 export async function attachRouting(
   tenantId: string,
   billOfMaterialsId: string,
   routingId: string,
 ): Promise<BillOfMaterials | null> {
+  // F3: validate the routing belongs to this tenant BEFORE the UPDATE.
+  // Without this, a foreign routingId is silently accepted (the UPDATE's
+  // WHERE clause only checks billOfMaterialsId), leaving the BoM pointing
+  // at a routing_id RLS will never let this tenant read again.
+  const routing = await getRouting(tenantId, routingId);
+  if (!routing) {
+    return null;
+  }
+
   return withTenant(tenantId, async (tx) => {
     const rows = await tx`
       UPDATE bill_of_materials

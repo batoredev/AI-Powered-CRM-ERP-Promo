@@ -63,6 +63,8 @@ Confirmed with the user (before the research pivot, still applies): **Phase 3A (
 - The actual admin/dev panel for flipping `tenant_erp_settings` — a later phase (aligns with roadmap Phase 6's plugin-permission consent screen).
 - Barcode, landed cost, inventory valuation method (FIFO/AVCO/standard) — noted by research as deferrable, not built in Phase 3A.
 - Variants and lot/serial tracking — deferred per §4 above.
+- Multi-level BoM explosion — Phase 3A-3's `bill_of_materials`/`bom_component` schema correctly supports recursive BoMs (a component may itself be a manufactured product with its own BoM, per research §3.1), but `completeManufacturingOrder` only walks one level and refuses to complete an MO whose BoM contains a component that is itself manufacturable, rather than attempting an explosion it cannot yet do correctly. The read-time graph-walk algorithm is deferred to a later phase.
+- Kit/phantom BoM semantics — `bom_type = 'kit'` is currently schema-only decoration with no behavioral difference from `manufacture`; per research §3.1 a kit should explode at sale time and never be stocked as a finished good, but that behavior depends on a consumer that does not exist yet (Phase 3B's UI, or a future `sales_order` integration). Deferred until such a consumer exists.
 
 ## 7. GDPR erasure vs. append-only history — resolved
 

@@ -73,4 +73,27 @@ describe('routing data access', () => {
     const result = await attachRouting(tenant.id, '00000000-0000-0000-0000-000000000000', routing.id);
     expect(result).toBeNull();
   });
+
+  it('F3 regression: attachRouting returns null for a cross-tenant routingId', async () => {
+    const [tenantA] = await ownerSql`INSERT INTO tenant (name) VALUES ('Routing Test Tenant 4A') RETURNING id`;
+    const [tenantB] = await ownerSql`INSERT INTO tenant (name) VALUES ('Routing Test Tenant 4B') RETURNING id`;
+
+    const workCenterB = await createWorkCenter(tenantB.id, { name: 'Tenant B Line' });
+    const otherTenantRouting = await createRouting(tenantB.id, {
+      name: 'Tenant B Routing',
+      operations: [{ workCenterId: workCenterB.id, sequence: 1, name: 'Step', durationMinutes: 5 }],
+    });
+
+    const finishedGood = await createProduct(tenantA.id, { name: 'Tenant A Product', productType: 'goods' });
+    const part = await createProduct(tenantA.id, { name: 'Tenant A Part', productType: 'goods' });
+    const bom = await createBom(tenantA.id, {
+      productId: finishedGood.id,
+      name: 'Tenant A BoM',
+      bomType: 'manufacture',
+      components: [{ componentProductId: part.id, quantity: 1 }],
+    });
+
+    const result = await attachRouting(tenantA.id, bom.id, otherTenantRouting.id);
+    expect(result).toBeNull();
+  });
 });

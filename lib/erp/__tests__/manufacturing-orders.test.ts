@@ -226,4 +226,105 @@ describe('manufacturing order data access', () => {
     expect(stillPlanned!.status).toBe('planned');
     expect(await getStockOnHand(tenantA.id, finishedGood.id, targetLocation.id)).toBe(0);
   });
+
+  it('F2 regression: rejects a cross-tenant billOfMaterialsId before writing anything', async () => {
+    const [tenantA] = await ownerSql`INSERT INTO tenant (name) VALUES ('MO Test Tenant 9A') RETURNING id`;
+    const [tenantB] = await ownerSql`INSERT INTO tenant (name) VALUES ('MO Test Tenant 9B') RETURNING id`;
+
+    const otherFinishedGood = await createProduct(tenantB.id, { name: 'Tenant B Widget', productType: 'goods' });
+    const otherPart = await createProduct(tenantB.id, { name: 'Tenant B Part', productType: 'goods' });
+    const otherTenantBom = await createBom(tenantB.id, {
+      productId: otherFinishedGood.id,
+      name: 'Tenant B BoM',
+      bomType: 'manufacture',
+      components: [{ componentProductId: otherPart.id, quantity: 1 }],
+    });
+
+    const finishedGood = await createProduct(tenantA.id, { name: 'Tenant A Widget', productType: 'goods' });
+    const location = await createLocation(tenantA.id, { name: 'Tenant A Factory Floor' });
+
+    await expect(
+      createManufacturingOrder(tenantA.id, {
+        productId: finishedGood.id,
+        billOfMaterialsId: otherTenantBom.id,
+        quantity: 1,
+        targetLocationId: location.id,
+      }),
+    ).rejects.toThrow(/does not belong to this tenant/);
+  });
+
+  it('F5 regression: rejects a productId that does not match the BoM\'s own product', async () => {
+    const [tenant] = await ownerSql`INSERT INTO tenant (name) VALUES ('MO Test Tenant 10') RETURNING id`;
+    const productOne = await createProduct(tenant.id, { name: 'Product One', productType: 'goods' });
+    const productTwo = await createProduct(tenant.id, { name: 'Product Two', productType: 'goods' });
+    const part = await createProduct(tenant.id, { name: 'Part', productType: 'goods' });
+    const bomForProductOne = await createBom(tenant.id, {
+      productId: productOne.id,
+      name: 'BoM for Product One',
+      bomType: 'manufacture',
+      components: [{ componentProductId: part.id, quantity: 1 }],
+    });
+    const location = await createLocation(tenant.id, { name: 'Factory Floor' });
+
+    await expect(
+      createManufacturingOrder(tenant.id, {
+        productId: productTwo.id,
+        billOfMaterialsId: bomForProductOne.id,
+        quantity: 1,
+        targetLocationId: location.id,
+      }),
+    ).rejects.toThrow(/productId does not match/);
+  });
+
+  it('F4 regression: refuses to complete an MO whose BoM has a component that is itself manufacturable (two-level BoM)', async () => {
+    const [tenant] = await ownerSql`INSERT INTO tenant (name) VALUES ('MO Test Tenant 11') RETURNING id`;
+
+    const rawSteel = await createProduct(tenant.id, { name: 'Raw Steel', productType: 'goods' });
+    const subAssembly = await createProduct(tenant.id, { name: 'Sub Assembly', productType: 'goods' });
+    const finishedMachine = await createProduct(tenant.id, { name: 'Finished Machine', productType: 'goods' });
+
+    // Sub Assembly is itself manufactured from Raw Steel.
+    await createBom(tenant.id, {
+      productId: subAssembly.id,
+      name: 'Sub Assembly BoM',
+      bomType: 'manufacture',
+      components: [{ componentProductId: rawSteel.id, quantity: 2 }],
+    });
+
+    // Finished Machine's BoM consumes Sub Assembly directly (one level).
+    const machineBom = await createBom(tenant.id, {
+      productId: finishedMachine.id,
+      name: 'Finished Machine BoM',
+      bomType: 'manufacture',
+      components: [{ componentProductId: subAssembly.id, quantity: 3 }],
+    });
+
+    const sourceLocation = await createLocation(tenant.id, { name: 'Raw Materials' });
+    const targetLocation = await createLocation(tenant.id, { name: 'Finished Goods' });
+
+    await recordStockMove(tenant.id, {
+      productId: rawSteel.id,
+      locationId: sourceLocation.id,
+      quantity: 1000,
+      movementType: 'receipt',
+    });
+
+    const mo = await createManufacturingOrder(tenant.id, {
+      productId: finishedMachine.id,
+      billOfMaterialsId: machineBom.id,
+      quantity: 4,
+      targetLocationId: targetLocation.id,
+    });
+    await planManufacturingOrder(tenant.id, mo.id);
+
+    const result = await completeManufacturingOrder(tenant.id, mo.id, sourceLocation.id);
+    expect(result).toBeNull();
+
+    // Refused: no phantom consumption, no phantom receipt, MO stays planned.
+    const stillPlanned = await getManufacturingOrder(tenant.id, mo.id);
+    expect(stillPlanned!.status).toBe('planned');
+    expect(await getStockOnHand(tenant.id, rawSteel.id, sourceLocation.id)).toBe(1000);
+    expect(await getStockOnHand(tenant.id, subAssembly.id, sourceLocation.id)).toBe(0);
+    expect(await getStockOnHand(tenant.id, finishedMachine.id, targetLocation.id)).toBe(0);
+  });
 });

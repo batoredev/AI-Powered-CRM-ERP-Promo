@@ -1,4 +1,5 @@
 import { withTenant } from '../db/with-tenant';
+import { getProduct } from './products';
 
 export type BomType = 'manufacture' | 'kit';
 
@@ -50,6 +51,20 @@ function rowToBomComponent(row: any): BomComponent {
 }
 
 export async function createBom(tenantId: string, input: NewBom): Promise<BillOfMaterials> {
+  // F1: validate every product reference belongs to this tenant BEFORE any
+  // write. The FK constraints on product_id/component_product_id are
+  // tenant-blind (they check existence globally, not tenant ownership), so
+  // RLS alone does not stop a cross-tenant id from being written here.
+  // Mirrors receivePurchaseOrder's getLocation pre-check (Phase 3A-2 F1).
+  if (!(await getProduct(tenantId, input.productId))) {
+    throw new Error(`Invalid product reference: ${input.productId} does not belong to this tenant`);
+  }
+  for (const component of input.components) {
+    if (!(await getProduct(tenantId, component.componentProductId))) {
+      throw new Error(`Invalid product reference: ${component.componentProductId} does not belong to this tenant`);
+    }
+  }
+
   return withTenant(tenantId, async (tx) => {
     const [bomRow] = await tx`
       INSERT INTO bill_of_materials (tenant_id, product_id, name, bom_type)

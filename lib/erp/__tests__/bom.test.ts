@@ -62,4 +62,36 @@ describe('bill of materials data access', () => {
     const result = await getBom(tenant.id, '00000000-0000-0000-0000-000000000000');
     expect(result).toBeNull();
   });
+
+  it('F1 regression: rejects a cross-tenant productId before any write', async () => {
+    const [tenantA] = await ownerSql`INSERT INTO tenant (name) VALUES ('BoM Test Tenant 4A') RETURNING id`;
+    const [tenantB] = await ownerSql`INSERT INTO tenant (name) VALUES ('BoM Test Tenant 4B') RETURNING id`;
+    const otherTenantProduct = await createProduct(tenantB.id, { name: 'Tenant B Product', productType: 'goods' });
+    const ownPart = await createProduct(tenantA.id, { name: 'Tenant A Part', productType: 'goods' });
+
+    await expect(
+      createBom(tenantA.id, {
+        productId: otherTenantProduct.id,
+        name: 'Cross-tenant BoM',
+        bomType: 'manufacture',
+        components: [{ componentProductId: ownPart.id, quantity: 1 }],
+      }),
+    ).rejects.toThrow(/does not belong to this tenant/);
+  });
+
+  it('F1 regression: rejects a cross-tenant componentProductId before any write', async () => {
+    const [tenantA] = await ownerSql`INSERT INTO tenant (name) VALUES ('BoM Test Tenant 5A') RETURNING id`;
+    const [tenantB] = await ownerSql`INSERT INTO tenant (name) VALUES ('BoM Test Tenant 5B') RETURNING id`;
+    const ownFinishedGood = await createProduct(tenantA.id, { name: 'Tenant A Finished Good', productType: 'goods' });
+    const otherTenantPart = await createProduct(tenantB.id, { name: 'Tenant B Part', productType: 'goods' });
+
+    await expect(
+      createBom(tenantA.id, {
+        productId: ownFinishedGood.id,
+        name: 'Cross-tenant Component BoM',
+        bomType: 'manufacture',
+        components: [{ componentProductId: otherTenantPart.id, quantity: 1 }],
+      }),
+    ).rejects.toThrow(/does not belong to this tenant/);
+  });
 });

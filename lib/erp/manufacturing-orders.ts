@@ -3,6 +3,7 @@ import { nextDocumentNumber } from './document-sequence';
 import { listOperations } from './routing';
 import { getBom, listBomComponents } from './bom';
 import { getLocation } from './locations';
+import { getProduct } from './products';
 
 export type ManufacturingOrderStatus = 'draft' | 'planned' | 'in_progress' | 'completed' | 'cancelled';
 export type ApprovalState = 'draft' | 'pending_approval' | 'approved' | 'rejected' | 'withdrawn';
@@ -48,6 +49,30 @@ export async function createManufacturingOrder(
   tenantId: string,
   input: NewManufacturingOrder,
 ): Promise<ManufacturingOrder> {
+  // F2: validate every FK argument belongs to this tenant BEFORE calling
+  // nextDocumentNumber or writing anything. Same class of check as
+  // receivePurchaseOrder's getLocation (Phase 3A-2 F1) — the FK constraints
+  // on product_id/bill_of_materials_id/target_location_id are tenant-blind,
+  // and RLS alone turns a rejected cross-tenant reference into a silent
+  // wrong answer downstream (completeManufacturingOrder reading zero BoM
+  // components back) rather than a loud rejection here.
+  const product = await getProduct(tenantId, input.productId);
+  if (!product) {
+    throw new Error(`Invalid product reference: ${input.productId} does not belong to this tenant`);
+  }
+  const bom = await getBom(tenantId, input.billOfMaterialsId);
+  if (!bom) {
+    throw new Error(`Invalid bill of materials reference: ${input.billOfMaterialsId} does not belong to this tenant`);
+  }
+  if (!(await getLocation(tenantId, input.targetLocationId))) {
+    throw new Error(`Invalid location reference: ${input.targetLocationId} does not belong to this tenant`);
+  }
+  // F5: the MO's declared output product must match the BoM's own product —
+  // otherwise a caller can manufacture any product from any recipe.
+  if (bom.productId !== input.productId) {
+    throw new Error("productId does not match the bill of materials' product");
+  }
+
   const documentNumber = await nextDocumentNumber(tenantId, 'manufacturing_order');
 
   return withTenant(tenantId, async (tx) => {
@@ -170,6 +195,25 @@ export async function completeManufacturingOrder(
   // consumption AND the finished-good receipt are recorded) or nothing
   // does. No partial "completed but under-consumed" states.
   return withTenant(tenantId, async (tx) => {
+    // F4: multi-level BoM guard, checked BEFORE the status-flip UPDATE so a
+    // refusal never commits a partial state. Multi-level explosion is not
+    // implemented in Phase 3A-3 (research §3.1 requires it; the schema
+    // supports a component being itself manufacturable via its own
+    // bill_of_materials rows; the read-time graph-walk algorithm is
+    // deferred to a later phase — see design spec §6). Refuse rather than
+    // silently consuming a sub-assembly that was never itself manufactured:
+    // if any direct component is itself manufacturable (has at least one
+    // BoM of its own), completing this MO would under-consume/over-credit
+    // stock with no error, which is worse than refusing outright.
+    for (const component of components) {
+      const subBom = await tx`
+        SELECT 1 FROM bill_of_materials WHERE tenant_id = ${tenantId} AND product_id = ${component.componentProductId} LIMIT 1
+      `;
+      if (subBom.length > 0) {
+        return null;
+      }
+    }
+
     const rows = await tx`
       UPDATE manufacturing_order
       SET status = 'completed', updated_at = now()
