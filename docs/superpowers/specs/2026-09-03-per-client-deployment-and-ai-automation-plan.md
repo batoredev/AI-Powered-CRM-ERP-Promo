@@ -1,12 +1,16 @@
 # Plan: Per-Client Deployment Architecture + AI-Automation Roadmap
 
-**Date:** 2026-09-03
-**Status:** Ready for review. **Nothing in this plan has been implemented.** Per the
-user's explicit sequencing (research → plan → implement), execution begins only
-after this document is reviewed and approved.
-**Author:** Claude session `ai-crm-erp-33`, coordinated with peer session
-`ai-crm-erp-ad` (owns Phase 3A-3 ERP schema work, unaffected by this plan — see
-§0).
+**Date:** 2026-09-03 (revised 2026-09-05)
+**Status:** Ready for final user sign-off. **Nothing in this plan has been
+implemented.** §5's open decisions are now resolved (below) and §3.5 (the
+dev-page tool) is written in. Per the user's explicit sequencing (research →
+plan → implement), execution begins only after this document is explicitly
+approved.
+**Author:** Originally Claude session `ai-crm-erp-33`/`ai-crm-erp-74`
+(research + initial plan), handed off 2026-09-04 to session `ai-crm-erp-be`
+(now sole owner of this plan and its implementation, per the user's explicit
+"run everything in this session" instruction) — see `EXECUTION_PLAN.md` for
+the up-to-date ownership and sequencing record.
 **Research this plan is built on:**
 - [`research/2026-09-03-per-client-deployment-model.md`](research/2026-09-03-per-client-deployment-model.md)
 - [`research/2026-09-03-ai-native-business-backend.md`](research/2026-09-03-ai-native-business-backend.md)
@@ -193,6 +197,63 @@ last successful health check. This is the tool that prevents the "invisible
 version drift until it's an incident" failure mode the research flagged as the
 single most common real-world failure at this pattern's scale.
 
+### 3.5 The developer configuration tool (offline, local-only — never shipped)
+
+**Non-negotiable constraint, per the user's explicit instruction (2026-09-04):**
+this tool is visible only to the developer, on their own machine, and is never
+part of any production build a client can reach. Nothing about its existence,
+its code, or its UI ships to `main`'s deployed output. It is not a hosted page
+gated by auth — it does not run on any server at all.
+
+**Mechanism — File System Access API, following the user's own working
+reference implementation** (`dev.html`, a sibling project; independently
+verified against the live file 2026-09-05, not just summarized):
+
+- `window.showDirectoryPicker({ mode: 'readwrite', id: '<project-id>' })`
+  grants the page direct read/write access to a folder on the developer's
+  local disk. No server involvement, no upload.
+- Full-overwrite file writes: `dirHandle.getFileHandle(name, { create: true })`
+  → `fileHandle.createWritable()` → `writable.write(content)` →
+  `writable.close()`. Nested paths walk `getDirectoryHandle(part,
+  { create: true })` per path segment before the final `getFileHandle` call.
+- This is a **single self-contained HTML file** — no build step, no server, no
+  framework. A developer double-clicks it (or opens it via `file://`), grants
+  folder access once, and it operates directly on the chosen folder from then
+  on. Chrome/Edge only (File System Access API is not implemented in Firefox
+  or Safari as of this writing) — acceptable since this is a developer-only
+  tool, not client-facing.
+
+**What it is for:** the developer picks a client's feature-manifest selection
+(the §2.3 shape — which CRM/ERP/AI/channel modules are active) in this local
+tool, and the tool generates or regenerates that client's deployment
+configuration on disk — the manifest seed data, environment variable
+templates, and any per-client config files `provision-client.ts` (§3.1) needs
+as input. **Only that generated output is ever pushed to the client's own
+GitHub repo or deploy pipeline — the dev-page tool itself is never committed,
+built, or deployed anywhere.** This mirrors `dev.html`'s own
+`generateBundle()` → `writeIndexHTML()` pattern: pick/edit config in the local
+tool, regenerate the output files on disk immediately on every change, and the
+regenerated *files* — not the tool — are what leaves the developer's machine.
+
+**Where this fits relative to `provision-client.ts` (§3.1):** the dev-page
+tool is the human-facing config-selection step; `provision-client.ts` is the
+scripted step that actually provisions infrastructure from the resulting
+manifest. The dev-page tool's output feeds `provision-client.ts` as input —
+it does not replace it.
+
+**One naming note, corrected from an earlier informal comparison:** `dev.html`
+also has an `FF_GROUPS`-driven feature-flag panel (`ffLoad`/`ffSave`/
+`ffRender`/`ffToggle`/`ffResetAll`, `localStorage`-backed), but that panel
+toggles *that app's own UI sections* for its own single deployment — it is
+not a per-client selector. It is structurally similar to what this tool needs
+(a grouped list of `{key, label, sub}` toggles) and worth reusing as a UI
+pattern, but it solves a different problem than the per-client manifest
+selection described above; the two should not be conflated when building
+this tool.
+
+**Status:** design-only as of this revision. Not yet implemented — build
+begins once this document is signed off (§5, §7).
+
 ### 3.4 Customization discipline (from research, enforced structurally)
 
 The research finding that makes automated update propagation actually work:
@@ -315,28 +376,42 @@ flags them as expensive/risky for a first release:**
 
 ---
 
-## 5. Open decisions that still need a human answer
+## 5. Open decisions — resolved by the user (2026-09-05)
 
-Carried forward from research, not resolved by this plan — flagging rather than
-guessing, per this project's own routing rules (`.claude/rules/routing.md` §4):
+All four were previously flagged as needing a human answer. The user answered
+directly via AskUserQuestion; recorded here verbatim in effect, with the
+reasoning each answer implies for downstream design:
 
-1. **Autonomy posture** — match the conservative "prepare for approval" baseline
-   every incumbent uses (Microsoft's Payables Agent stops there even at their
-   scale), or make *earned* higher autonomy the actual product bet? This
-   determines whether the system is architected around an approval queue or an
-   earned-trust ledger — the research is explicit these are not refactorable into
-   each other after the fact.
-2. **Pricing model** — seat-based vs. outcome-based per automated transaction.
-   Outcome-based pricing is a proven differentiator (Sierra's ~$1.50/resolution
-   model) but requires per-workflow cost instrumentation from day one, which
-   §4.1.3's audit trail work already builds toward regardless of which pricing
-   model is chosen.
-3. **Realistic 12-24 month client count** — determines whether the Cloudflare
-   ceiling in §2.2 is a real near-term constraint or a distant one, and whether
-   budgeting for a Workers-for-Platforms Enterprise quote belongs in this
-   roadmap or a later one.
-4. **Regulated-domain appetite** — tax/payroll in or out of scope for the first
-   release, given the distinct legal-liability profile.
+1. **Autonomy posture — graduated autonomy.** Not the conservative
+   "prepare for approval only" baseline every incumbent stops at, and not full
+   autonomy either: every workflow **starts** draft-only (human approves each
+   action) and **earns** auto-execute rights over time, per workflow, based on
+   a measured track record. This directly confirms §4.1.2's "graduated, earned
+   autonomy" thesis as the actual product bet, not just a research finding —
+   architect around an earned-trust ledger per workflow, not a flat global
+   approval-queue setting.
+2. **Pricing model — hybrid: both flat monthly per client AND
+   usage/seat-based.** Not one exclusively. A base flat fee per client plus a
+   usage- or seat-based component that scales with client size/activity. The
+   exact mix (e.g. flat base + metered overage per automated action) is not
+   yet specified — this still needs working out during implementation, but the
+   direction (hybrid, not pure-seat or pure-outcome) is settled. This still
+   benefits from §4.1.3's per-workflow cost instrumentation regardless of the
+   exact split, since usage-based billing needs the same cost data outcome
+   -based billing would have.
+3. **Client-count scale — small, up to ~20 clients.** The §2.2 Cloudflare
+   ceiling (500 Workers, 100 custom domains/zone) is **not** a near-term
+   constraint at this scale — no need to design around Workers-for-Platforms
+   or an Enterprise quote yet. Revisit only if actual growth outpaces this
+   estimate (§6's "client count approaching ~80-100" trigger point stays as
+   the re-evaluation signal, now known to be well above the currently
+   -planned scale).
+4. **Regulated-domain appetite — yes, eventually, not now.** Do not build
+   compliance controls (HIPAA/SOC2/PCI-type work) for the first release —
+   §4.3's existing deferral of "regulated-domain automation (tax, payroll)"
+   stands. But do not architect in a way that forecloses adding them later:
+   avoid decisions that would require a rewrite (rather than an addition) to
+   support a regulated client in the future.
 
 ---
 
@@ -358,10 +433,12 @@ guessing, per this project's own routing rules (`.claude/rules/routing.md` §4):
 ## 7. What happens next
 
 This document is the plan-for-review artifact per the user's confirmed
-sequencing. **No implementation begins until this is explicitly approved.** Once
-approved, suggested next steps in order:
+sequencing. **No implementation begins until this is explicitly approved.**
+§5's four open decisions are now resolved (2026-09-05) and §3.5 (the dev-page
+tool) is written in — the remaining gap before implementation is the user's
+final sign-off on this revised document. Once approved, next steps in order:
 
-1. Confirm the four open decisions in §5.
+1. Build the offline dev-page tool (§3.5).
 2. Spin up `tools/provision-client.ts` against a single test client (proves the
    provisioning pipeline before any real client depends on it).
 3. Extend the tool-contract pattern (§4.2) with ERP tools, targeting MCP spec
