@@ -107,8 +107,8 @@
         "lib/erp/time-entries.ts"
       ],
       "migrations": ["0020_project.sql", "0021_task.sql", "0022_time_entry.sql"],
-      "dependsOn": ["crm.contacts"],
-      "note": "project.contact_id references the CRM contact table (design spec §8's 'contact is one record, not duplicated per module' principle), not erp.core — the actual dependency, verified against migration 0020's REFERENCES clause, not guessed."
+      "dependsOn": ["crm.contacts", "erp.core"],
+      "note": "project.contact_id references the CRM contact table (design spec §8's 'contact is one record, not duplicated per module' principle), verified against migration 0020's REFERENCES clause. erp.core dependency added 2026-09-05 after the Phase 3A-4 final-review agent caught it empirically: time_entry.approval_state (0022) uses the approval_state ENUM TYPE defined in 0007/0011, which belongs to erp.core — an enum-type dependency, not a REFERENCES clause, so the original FK-only verification method for this file was structurally blind to it. erp.purchase_orders and erp.production don't need this listed explicitly since they already transitively depend on erp.core via erp.inventory, but erp.projects_time depends only on crm.contacts, so this dependency has to be explicit or provisioning a client with effort_based billing and no ERP core fails at 0022 with 'type approval_state does not exist'."
     },
     "ai.tool_contract": {
       "label": "AI tool contract (agent runtime)",
