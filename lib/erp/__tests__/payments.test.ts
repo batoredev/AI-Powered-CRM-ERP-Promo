@@ -83,4 +83,54 @@ describe('payment data access', () => {
       recordPaymentAllocation(tenantA.id, paymentA.id, invoiceB.id, 1000),
     ).rejects.toThrow();
   });
+
+  it('does not allow two concurrent allocations to together exceed the payment cap (row-lock race probe)', async () => {
+    // Targets the race the Task 3 final review flagged: without a row
+    // lock on `payment`, two concurrent recordPaymentAllocation calls
+    // against the SAME payment could both read the pre-allocation SUM,
+    // both pass the cap check, and both insert -- over-allocating past the
+    // cap. The SELECT ... FOR UPDATE added to recordPaymentAllocation is
+    // meant to serialize concurrent callers on the same payment row.
+    //
+    // Caveat, confirmed empirically 2026-09-05: this specific
+    // Promise.allSettled probe passes with the row lock in place, but it
+    // ALSO passed with the row lock temporarily removed during
+    // verification -- i.e. this test does not reliably reproduce the
+    // race under Node's single-threaded event loop + postgres.js's
+    // connection/transaction scheduling; the two calls appear not to
+    // genuinely interleave inside Postgres the way a true concurrent-
+    // client race would. The row lock is still correct defense-in-depth
+    // (a real race under true concurrent load -- e.g. two separate
+    // processes -- remains closed by it), but this particular test
+    // should not be read as empirical proof the fix is load-bearing; it
+    // only proves the happy-path invariant (allocations never exceed the
+    // cap) holds under this harness's execution model. A genuine
+    // multi-connection/multi-process concurrency test would be needed to
+    // actually falsify the lock's necessity.
+    const [tenant] = await ownerSql`INSERT INTO tenant (name) VALUES ('Payment Test Tenant 6') RETURNING id`;
+    const contact = await createContact(tenant.id, { fullName: 'Payer' });
+    const invoiceA = await setupInvoice(tenant.id, contact.id);
+    const invoiceB = await setupInvoice(tenant.id, contact.id);
+    const payment = await createPayment(tenant.id, { contactId: contact.id, amountMinorUnits: 10000, currencyCode: 'USD', receivedAt: '2026-09-05T00:00:00.000Z', method: 'card' });
+
+    // Two allocations of 7000 each against a 10000 cap: individually valid,
+    // but together (14000) exceed it -- exactly the scenario a check-then-
+    // insert race (without a row lock) would let both through.
+    const results = await Promise.allSettled([
+      recordPaymentAllocation(tenant.id, payment.id, invoiceA.id, 7000),
+      recordPaymentAllocation(tenant.id, payment.id, invoiceB.id, 7000),
+    ]);
+
+    const fulfilled = results.filter((r) => r.status === 'fulfilled');
+    const rejected = results.filter((r) => r.status === 'rejected');
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+
+    // Confirm the DB itself never held both allocations at once -- the
+    // real invariant, not just that one promise rejected.
+    const allocations = await listPaymentAllocations(tenant.id, payment.id);
+    expect(allocations).toHaveLength(1);
+    const totalAllocated = allocations.reduce((sum, a) => sum + a.allocatedAmountMinorUnits, 0);
+    expect(totalAllocated).toBeLessThanOrEqual(10000);
+  });
 });

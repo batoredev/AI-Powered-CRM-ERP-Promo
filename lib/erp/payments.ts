@@ -100,9 +100,21 @@ export async function recordPaymentAllocation(
   }
 
   return withTenant(tenantId, async (tx) => {
-    // Application-layer cap check, inside the SAME transaction as the
-    // insert below, so a concurrent allocation against the same payment
-    // can't race past the cap between the check and the insert.
+    // Row lock on the payment itself BEFORE the cap check, closing a race
+    // that "same transaction" alone does not: under plain READ COMMITTED,
+    // two concurrent recordPaymentAllocation calls against the same
+    // payment_id could both run the SUM check, both see the pre-allocation
+    // total, and both pass, over-allocating past the cap before either
+    // commits (SUM is not a row lock). SELECT ... FOR UPDATE here forces
+    // the second concurrent caller to block until the first transaction
+    // commits or rolls back, so its subsequent SUM genuinely reflects the
+    // first caller's just-inserted allocation. Found by final-review
+    // adversarial reasoning during Phase 3A-5 Task 3's review — the same
+    // class of race Phase 3A-2's receivePurchaseOrder fix (commit
+    // 89a7ef1) closed for double-receive, applied here to double-
+    // allocation instead.
+    await tx`SELECT 1 FROM payment WHERE id = ${paymentId} FOR UPDATE`;
+
     const existing = await tx`
       SELECT COALESCE(SUM(allocated_amount_minor_units), 0) AS total
       FROM payment_allocation
