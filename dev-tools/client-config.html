@@ -2,213 +2,382 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>AI CRM-ERP — Client Config (DEV ONLY)</title>
+<title>AI CRM-ERP — Client Generator (DEV ONLY)</title>
 <meta name="robots" content="noindex, nofollow">
 <style>
   :root { color-scheme: light dark; }
   body { font-family: -apple-system, Segoe UI, sans-serif; background:#0f1115; color:#e6e6e6; margin:0; padding:0; }
   .banner { background:#7a1f1f; color:#fff; text-align:center; padding:8px; font-weight:600; font-size:12px; letter-spacing:.03em; }
-  .wrap { max-width:720px; margin:40px auto; padding:0 20px; }
-  h1 { font-size:24px; margin-bottom:4px; }
-  .sub { color:#9aa0a6; font-size:13px; margin-bottom:24px; }
-  .gate { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:60vh; gap:16px; text-align:center; }
-  button { background:#2f6fed; color:#fff; border:none; border-radius:8px; padding:10px 18px; font-size:16px; cursor:pointer; }
-  button:hover { background:#255bc4; }
+  .wrap { max-width:760px; margin:40px auto; padding:0 20px 60px; }
+  h1 { font-size:22px; margin-bottom:4px; }
+  .sub { color:#9aa0a6; font-size:13px; margin-bottom:20px; line-height:1.5; }
+  .gate { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:60vh; gap:14px; text-align:center; }
+  .gate .sub { max-width:480px; }
+  button { background:#2f6fed; color:#fff; border:none; border-radius:8px; padding:10px 18px; font-size:14px; cursor:pointer; }
+  button:hover:not(:disabled) { background:#255bc4; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
   button.secondary { background:#2a2d35; }
-  button.secondary:hover { background:#363a44; }
+  button.secondary:hover:not(:disabled) { background:#363a44; }
   .err { color:#ff6b6b; font-size:13px; min-height:18px; }
   .card { background:#171a20; border:1px solid #2a2d35; border-radius:12px; padding:20px; margin-bottom:16px; }
-  .card h2 { font-size:16px; margin:0 0 12px; color:#e6e6e6; }
+  .card h2 { font-size:15px; margin:0 0 4px; color:#e6e6e6; }
+  .card .group-sub { color:#9aa0a6; font-size:12px; margin:0 0 12px; }
   .field { margin-bottom:14px; }
   .field label.title { display:block; font-size:13px; font-weight:600; margin-bottom:6px; }
-  .radio-row, .check-row { display:flex; gap:8px; flex-wrap:wrap; }
-  .opt { display:flex; align-items:center; gap:6px; background:#1a1d24; border:1px solid #2a2d35; border-radius:8px; padding:6px 12px; cursor:pointer; font-size:13px; }
-  .opt.on { border-color:#2f6fed; background:#16233f; }
-  .opt input { accent-color:#2f6fed; }
-  input[type=text] { width:100%; box-sizing:border-box; padding:9px 12px; border-radius:8px; border:1px solid #2a2d35; background:#1a1d24; color:#fff; font-size:16px; }
-  .status { font-size:12px; color:#9aa0a6; margin-top:6px; min-height:16px; }
+  input[type=text] { width:100%; box-sizing:border-box; padding:9px 12px; border-radius:8px; border:1px solid #2a2d35; background:#1a1d24; color:#fff; font-size:14px; }
+  .feature-row { display:flex; align-items:flex-start; gap:10px; padding:8px 0; border-bottom:1px solid #22252c; }
+  .feature-row:last-child { border-bottom:none; }
+  .feature-row input[type=checkbox] { margin-top:3px; accent-color:#2f6fed; }
+  .feature-row .flabel { font-size:13px; font-weight:600; }
+  .feature-row .fdep { font-size:11px; color:#7d8590; margin-top:2px; }
+  .feature-row.disabled { opacity:.5; }
+  .mode-tabs { display:flex; gap:8px; margin-bottom:20px; }
+  .mode-tabs button { flex:1; background:#1a1d24; border:1px solid #2a2d35; }
+  .mode-tabs button.active { background:#16233f; border-color:#2f6fed; }
+  .status { font-size:12px; color:#9aa0a6; margin-top:10px; min-height:16px; white-space:pre-wrap; }
   .status.ok { color:#4caf7d; }
   .status.err { color:#ff6b6b; }
-  .footer-row { display:flex; gap:10px; align-items:center; margin-top:8px; }
+  .footer-row { display:flex; gap:10px; align-items:center; margin-top:8px; flex-wrap:wrap; }
   code { background:#1a1d24; padding:1px 6px; border-radius:4px; font-size:12px; }
   #app { display:none; }
+  .log { background:#0a0b0d; border:1px solid #2a2d35; border-radius:8px; padding:12px; font-family:monospace; font-size:12px; max-height:240px; overflow-y:auto; white-space:pre-wrap; margin-top:12px; }
 </style>
 </head>
 <body>
 
-<div class="banner">DEV-ONLY TOOL — never bundled, never deployed. Runs locally against a folder you pick.</div>
+<div class="banner">DEV-ONLY TOOL — never bundled, never deployed. Generates real standalone client codebases from this repo's shared source.</div>
 
-<div id="folder-gate" class="wrap">
+<div id="repo-gate" class="wrap">
   <div class="gate">
-    <h1>AI CRM-ERP — Client Config</h1>
-    <p class="sub">Pick the local folder this tool will write client manifests into (e.g. a scratch <code>clients/</code> folder in this repo, or anywhere else on disk).</p>
-    <button onclick="openFolder()">Choose folder…</button>
-    <div class="err" id="folder-err"></div>
+    <h1>AI CRM-ERP — Client Generator</h1>
+    <p class="sub">Step 1 of 2: grant read access to <b>this repo's root folder</b> — the tool reads <code>dev-tools/feature-manifest.json</code> and copies source files from here into each client's generated codebase.</p>
+    <button onclick="openRepoFolder()">Choose this repo's folder…</button>
+    <div class="err" id="repo-err"></div>
+  </div>
+</div>
+
+<div id="output-gate" class="wrap" style="display:none;">
+  <div class="gate">
+    <h1>Pick the output folder</h1>
+    <p class="sub">Step 2 of 2: pick the folder to generate a NEW client's codebase into, or an EXISTING client's folder to update it. The tool detects which one it is from whether <code>_client-manifest.json</code> already exists in the folder you pick.</p>
+    <button onclick="openOutputFolder()">Choose output folder…</button>
+    <div class="err" id="output-err"></div>
     <p class="sub">Requires Chrome or Edge (File System Access API). Nothing is uploaded anywhere — this page never makes a network request.</p>
   </div>
 </div>
 
 <div id="app" class="wrap">
-  <h1>Client Config</h1>
-  <p class="sub">Writing into: <code id="folder-name"></code>. Every change below regenerates the client's files on disk immediately.</p>
+  <h1 id="modeTitle">Client Generator</h1>
+  <p class="sub" id="modeSub"></p>
 
   <div class="card">
     <h2>Client</h2>
     <div class="field">
-      <label class="title" for="clientName">Client name (used as the folder/slug)</label>
-      <input type="text" id="clientName" placeholder="e.g. acme-co" oninput="onChange()">
+      <label class="title" for="clientName">Client name</label>
+      <input type="text" id="clientName" placeholder="e.g. Acme Co" oninput="onClientNameChange()">
     </div>
   </div>
 
-  <div class="card">
-    <h2>Goods handling</h2>
-    <p class="sub" style="margin:-6px 0 12px;">Matches <code>tenant_erp_settings.goods_handling</code> (migration 0006) — a tenant is at one point on this spectrum.</p>
-    <div class="field radio-row" id="goodsHandlingRow"></div>
-  </div>
-
-  <div class="card">
-    <h2>Billing modes</h2>
-    <p class="sub" style="margin:-6px 0 12px;">Matches <code>tenant_erp_settings.billing_modes</code> — an array; a tenant can combine modes.</p>
-    <div class="field check-row" id="billingModesRow"></div>
-  </div>
+  <div id="featureGroups"></div>
 
   <div class="footer-row">
-    <button onclick="generateNow()">Regenerate now</button>
-    <button class="secondary" onclick="openFolder()">Change folder…</button>
+    <button id="generateBtn" onclick="generateOrUpdate()">Generate</button>
+    <button class="secondary" onclick="location.reload()">Start over</button>
     <div class="status" id="genStatus"></div>
   </div>
+  <div class="log" id="log" style="display:none;"></div>
 </div>
 
 <script>
 // ── FILE SYSTEM ACCESS API ────────────────────────────────────────────
 // Pattern verified against C:\Users\sriva\Desktop\AlpenGlow WEB\AlpenGlow work\AlpenGlow\dev.html
-// (independently re-read 2026-09-05, not just summarized) — same calls,
-// same shape: showDirectoryPicker -> getDirectoryHandle(...,{create:true})
-// per path segment -> getFileHandle(...,{create:true}) -> createWritable()
-// -> write() -> close().
-let dirHandle = null;
+// (independently re-read 2026-09-05) — showDirectoryPicker -> getDirectoryHandle
+// (...,{create:true}) per path segment -> getFileHandle(...,{create:true}) ->
+// createWritable() -> write() -> close(). This tool needs TWO folder grants:
+// the repo (read source + manifest) and the output (write generated codebase).
+let repoDirHandle = null;
+let outputDirHandle = null;
+let manifest = null;
+let mode = null; // 'generate' | 'update'
+let existingManifest = null; // client's _client-manifest.json content, if mode==='update'
+let selected = new Set();
 
-async function openFolder() {
-  try {
-    dirHandle = await window.showDirectoryPicker({ mode: 'readwrite', id: 'ai-crm-erp-client-config' });
-    document.getElementById('folder-gate').style.display = 'none';
-    document.getElementById('app').style.display = 'block';
-    document.getElementById('folder-name').textContent = dirHandle.name;
-    renderOptions();
-  } catch (err) {
-    if (err.name !== 'AbortError') {
-      document.getElementById('folder-err').textContent = 'Could not open folder: ' + err.message;
-    }
-  }
+const CLIENT_MANIFEST_FILE = '_client-manifest.json';
+
+function log(msg) {
+  const el = document.getElementById('log');
+  el.style.display = 'block';
+  el.textContent += msg + '\n';
+  el.scrollTop = el.scrollHeight;
 }
 
-async function writeTextFile(path, text) {
+async function readTextFile(dir, path) {
   const parts = path.split('/').filter(Boolean);
-  let dir = dirHandle;
+  let d = dir;
+  for (let i = 0; i < parts.length - 1; i++) d = await d.getDirectoryHandle(parts[i]);
+  const fh = await d.getFileHandle(parts[parts.length - 1]);
+  return await (await fh.getFile()).text();
+}
+
+async function tryReadTextFile(dir, path) {
+  try { return await readTextFile(dir, path); } catch (e) { return null; }
+}
+
+async function writeTextFile(dir, path, text) {
+  const parts = path.split('/').filter(Boolean);
+  let d = dir;
   for (let i = 0; i < parts.length - 1; i++) {
-    dir = await dir.getDirectoryHandle(parts[i], { create: true });
+    d = await d.getDirectoryHandle(parts[i], { create: true });
   }
-  const fh = await dir.getFileHandle(parts[parts.length - 1], { create: true });
+  const fh = await d.getFileHandle(parts[parts.length - 1], { create: true });
   const w = await fh.createWritable();
   await w.write(text);
   await w.close();
 }
 
-// ── MANIFEST SHAPE ─────────────────────────────────────────────────
-// Deliberately scoped to what has real schema today: tenant_erp_settings
-// (migration 0006_tenant_erp_settings.sql) — goods_handling (single enum
-// value) and billing_modes (array). The CRM/AI/channels manifest sketched
-// conceptually in the deployment plan's §2.3 has no schema yet, so this
-// tool does not fabricate toggles for it (per the user's 2026-09-05
-// decision: "ERP axes only for now").
-const GOODS_HANDLING_OPTIONS = [
-  { value: 'off', label: 'Off', sub: 'no inventory/stock tracking' },
-  { value: 'basic_stock', label: 'Basic stock', sub: 'locations + stock_move ledger + purchase orders' },
-  { value: 'production', label: 'Production', sub: 'basic_stock + BoM, routing, manufacturing orders' },
-];
-const BILLING_MODE_OPTIONS = [
-  { value: 'transactional', label: 'Transactional', sub: 'one-off orders/invoices' },
-  { value: 'effort_based', label: 'Effort-based', sub: 'projects, tasks, time entries' },
-  { value: 'recurring', label: 'Recurring', sub: 'subscriptions' },
-];
-
-let state = { clientName: '', goodsHandling: 'off', billingModes: [] };
-
-function renderOptions() {
-  const gh = document.getElementById('goodsHandlingRow');
-  gh.innerHTML = GOODS_HANDLING_OPTIONS.map(o => `
-    <label class="opt ${state.goodsHandling === o.value ? 'on' : ''}" title="${o.sub}">
-      <input type="radio" name="goodsHandling" value="${o.value}" ${state.goodsHandling === o.value ? 'checked' : ''} onchange="setGoodsHandling('${o.value}')">
-      ${o.label}
-    </label>`).join('');
-
-  const bm = document.getElementById('billingModesRow');
-  bm.innerHTML = BILLING_MODE_OPTIONS.map(o => `
-    <label class="opt ${state.billingModes.includes(o.value) ? 'on' : ''}" title="${o.sub}">
-      <input type="checkbox" value="${o.value}" ${state.billingModes.includes(o.value) ? 'checked' : ''} onchange="toggleBillingMode('${o.value}')">
-      ${o.label}
-    </label>`).join('');
+async function removeFileIfExists(dir, path) {
+  const parts = path.split('/').filter(Boolean);
+  let d = dir;
+  try {
+    for (let i = 0; i < parts.length - 1; i++) d = await d.getDirectoryHandle(parts[i]);
+    await d.removeEntry(parts[parts.length - 1]);
+    return true;
+  } catch (e) {
+    return false; // didn't exist — fine, nothing to remove
+  }
 }
 
-function setGoodsHandling(v) { state.goodsHandling = v; renderOptions(); onChange(); }
-function toggleBillingMode(v) {
-  const i = state.billingModes.indexOf(v);
-  if (i === -1) state.billingModes.push(v); else state.billingModes.splice(i, 1);
-  renderOptions();
-  onChange();
+// ── STEP 1: REPO FOLDER ─────────────────────────────────────────────
+async function openRepoFolder() {
+  try {
+    repoDirHandle = await window.showDirectoryPicker({ mode: 'read', id: 'ai-crm-erp-repo-root' });
+    const manifestText = await readTextFile(repoDirHandle, 'dev-tools/feature-manifest.json');
+    manifest = JSON.parse(manifestText);
+    document.getElementById('repo-gate').style.display = 'none';
+    document.getElementById('output-gate').style.display = 'block';
+  } catch (err) {
+    if (err.name !== 'AbortError') {
+      document.getElementById('repo-err').textContent =
+        'Could not read dev-tools/feature-manifest.json from that folder — did you pick the repo root? (' + err.message + ')';
+    }
+  }
 }
 
-function onChange() {
-  state.clientName = document.getElementById('clientName').value.trim();
-  generateNow();
+// ── STEP 2: OUTPUT FOLDER — detects generate vs update ──────────────
+async function openOutputFolder() {
+  try {
+    outputDirHandle = await window.showDirectoryPicker({ mode: 'readwrite', id: 'ai-crm-erp-client-output' });
+    const existing = await tryReadTextFile(outputDirHandle, CLIENT_MANIFEST_FILE);
+    if (existing) {
+      mode = 'update';
+      existingManifest = JSON.parse(existing);
+      selected = new Set(existingManifest.features);
+    } else {
+      mode = 'generate';
+      existingManifest = null;
+      selected = new Set();
+    }
+    document.getElementById('output-gate').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    document.getElementById('modeTitle').textContent = mode === 'update'
+      ? 'Update existing client'
+      : 'Generate new client';
+    document.getElementById('modeSub').textContent = mode === 'update'
+      ? `Found ${CLIENT_MANIFEST_FILE} — this folder already has a generated codebase for "${existingManifest.client}". Toggling a feature below adds or removes its files to match.`
+      : `No ${CLIENT_MANIFEST_FILE} found — this is a fresh output folder. Pick features to generate a new standalone codebase.`;
+    document.getElementById('generateBtn').textContent = mode === 'update' ? 'Apply update' : 'Generate';
+    if (mode === 'update') {
+      document.getElementById('clientName').value = existingManifest.client;
+      document.getElementById('clientName').disabled = true; // renaming a client is out of scope — bounded tool, per plan §0.1 item 9
+    }
+    renderFeatureGroups();
+  } catch (err) {
+    if (err.name !== 'AbortError') {
+      document.getElementById('output-err').textContent = 'Could not open folder: ' + err.message;
+    }
+  }
+}
+
+// ── FEATURE CATALOG UI ───────────────────────────────────────────────
+function renderFeatureGroups() {
+  const groups = {};
+  for (const [key, f] of Object.entries(manifest.features)) {
+    (groups[f.group] ||= []).push({ key, ...f });
+  }
+  const container = document.getElementById('featureGroups');
+  container.innerHTML = Object.entries(groups).map(([groupName, feats]) => `
+    <div class="card">
+      <h2>${groupName}</h2>
+      <p class="group-sub">Fixed catalog — toggle features on/off. Dependencies are auto-selected.</p>
+      ${feats.map(f => `
+        <label class="feature-row" id="row-${f.key}">
+          <input type="checkbox" ${selected.has(f.key) ? 'checked' : ''} onchange="toggleFeature('${f.key}')">
+          <div>
+            <div class="flabel">${f.label}</div>
+            ${f.dependsOn.length ? `<div class="fdep">requires: ${f.dependsOn.join(', ')}</div>` : ''}
+          </div>
+        </label>
+      `).join('')}
+    </div>
+  `).join('');
+}
+
+function toggleFeature(key) {
+  if (selected.has(key)) {
+    // Deselecting: also deselect anything that depends on this feature,
+    // so we never leave a dangling dependency selected.
+    selected.delete(key);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const [k, f] of Object.entries(manifest.features)) {
+        if (selected.has(k) && f.dependsOn.some(d => !selected.has(d))) {
+          selected.delete(k);
+          changed = true;
+        }
+      }
+    }
+  } else {
+    // Selecting: pull in every transitive dependency too — the catalog
+    // is bounded and dependency-aware, not open-ended (plan §0.1 item 9).
+    const stack = [key];
+    while (stack.length) {
+      const k = stack.pop();
+      if (selected.has(k)) continue;
+      selected.add(k);
+      const f = manifest.features[k];
+      if (f) stack.push(...f.dependsOn);
+    }
+  }
+  renderFeatureGroups();
+}
+
+function onClientNameChange() { /* no-op: generation only happens on explicit button click, not on every keystroke — this is a real file-assembly operation, not a cheap regenerate-on-change like a config writer */ }
+
+// ── TOPOLOGICAL SORT of selected features' migrations ───────────────
+// Per plan §3.5.1 #4: migrations have real ordering dependencies that
+// don't align one-to-one with feature boundaries, so this resolves a
+// safe order from each feature's declared dependsOn before handing the
+// list to provision-client.ts.
+function resolveMigrationOrder(selectedKeys) {
+  const visited = new Set();
+  const order = [];
+  function visit(key) {
+    if (visited.has(key)) return;
+    visited.add(key);
+    const f = manifest.features[key];
+    if (!f) return;
+    for (const dep of f.dependsOn) visit(dep);
+    order.push(key);
+  }
+  for (const key of selectedKeys) visit(key);
+  const migrations = new Set(manifest.core.migrations);
+  for (const key of order) {
+    for (const m of manifest.features[key].migrations) migrations.add(m);
+  }
+  // Migration filenames are numerically prefixed (0001_, 0002_, ...) —
+  // sorting the final set lexically reproduces the correct global order
+  // regardless of which feature contributed which migration.
+  return [...migrations].sort();
+}
+
+function allSelectedFiles(selectedKeys) {
+  const files = new Set(manifest.core.files);
+  for (const key of selectedKeys) {
+    const f = manifest.features[key];
+    if (f) f.files.forEach(file => files.add(file));
+  }
+  return files;
+}
+
+// ── GENERATE / UPDATE ────────────────────────────────────────────────
+async function generateOrUpdate() {
+  const statusEl = document.getElementById('genStatus');
+  const clientName = document.getElementById('clientName').value.trim();
+  if (!clientName) {
+    statusEl.textContent = 'Enter a client name first.';
+    statusEl.className = 'status err';
+    return;
+  }
+  if (selected.size === 0) {
+    statusEl.textContent = 'Select at least one feature.';
+    statusEl.className = 'status err';
+    return;
+  }
+
+  document.getElementById('generateBtn').disabled = true;
+  statusEl.textContent = 'Working…';
+  statusEl.className = 'status';
+  document.getElementById('log').textContent = '';
+
+  try {
+    const newSelectedFiles = allSelectedFiles(selected);
+    const oldSelectedFiles = mode === 'update'
+      ? allSelectedFiles(new Set(existingManifest.features))
+      : new Set();
+
+    // Copy every file needed by the new selection (idempotent — an
+    // unchanged file is simply overwritten with the same content).
+    let copied = 0;
+    for (const filePath of newSelectedFiles) {
+      const content = await readTextFile(repoDirHandle, filePath);
+      await writeTextFile(outputDirHandle, filePath, content);
+      copied++;
+    }
+    log(`Copied ${copied} file(s).`);
+
+    // Phase 2 only: remove files that belonged ONLY to now-deselected
+    // features. A file still required by a still-selected feature (e.g.
+    // shared core, or a dependency another selected feature also needs)
+    // is never removed even if it's also listed under a deselected one.
+    let removed = 0;
+    if (mode === 'update') {
+      for (const filePath of oldSelectedFiles) {
+        if (!newSelectedFiles.has(filePath)) {
+          const didRemove = await removeFileIfExists(outputDirHandle, filePath);
+          if (didRemove) { removed++; log(`Removed ${filePath}`); }
+        }
+      }
+      log(`Removed ${removed} file(s) for deselected features.`);
+    }
+
+    // Write the client-side manifest recording current selection — this
+    // is what makes the NEXT update-pass detect current state (plan
+    // §3.5.1 #2's still-open drift-detection gap: this records what the
+    // tool generated, not proof the folder wasn't hand-edited since).
+    const clientManifest = {
+      client: clientName,
+      features: [...selected].sort(),
+      generatedAt: new Date().toISOString(),
+      migrations: resolveMigrationOrder(selected),
+    };
+    await writeTextFile(outputDirHandle, CLIENT_MANIFEST_FILE, JSON.stringify(clientManifest, null, 2));
+    log(`Wrote ${CLIENT_MANIFEST_FILE}.`);
+
+    // Also write a provision-client.ts-ready feature list, matching the
+    // shape tools/provision-client.ts's --manifest flag now expects
+    // (see that script's own doc comment for the exact contract).
+    await writeTextFile(outputDirHandle, 'clients/' + slugify(clientName) + '/manifest.json', JSON.stringify({
+      client: clientName,
+      slug: slugify(clientName),
+      generatedAt: clientManifest.generatedAt,
+      features: clientManifest.features,
+      migrations: clientManifest.migrations,
+    }, null, 2));
+
+    statusEl.textContent = `${mode === 'update' ? 'Update' : 'Generation'} complete — ${copied} file(s) written` + (removed ? `, ${removed} removed` : '') + '.';
+    statusEl.className = 'status ok';
+  } catch (err) {
+    statusEl.textContent = 'Failed: ' + err.message;
+    statusEl.className = 'status err';
+    log('ERROR: ' + err.message);
+  } finally {
+    document.getElementById('generateBtn').disabled = false;
+  }
 }
 
 function slugify(name) {
   return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'unnamed-client';
-}
-
-async function generateNow() {
-  const statusEl = document.getElementById('genStatus');
-  if (!dirHandle) return;
-  const slug = slugify(state.clientName);
-  if (!state.clientName) {
-    statusEl.textContent = 'Enter a client name to generate files.';
-    statusEl.className = 'status';
-    return;
-  }
-  try {
-    const manifest = {
-      client: state.clientName,
-      slug,
-      generatedAt: new Date().toISOString(),
-      erp: {
-        goodsHandling: state.goodsHandling,
-        billingModes: state.billingModes,
-      },
-    };
-    await writeTextFile(`clients/${slug}/manifest.json`, JSON.stringify(manifest, null, 2));
-
-    // seed.sql mirrors the exact tenant_erp_settings shape from migration 0006 —
-    // this is a template for provision-client.ts (§3.1 of the deployment plan)
-    // to run against the client's own database once it's provisioned; this tool
-    // does not connect to any database itself.
-    const billingArrayLiteral = '{' + state.billingModes.join(',') + '}';
-    const seedSql = `-- Generated by dev-tools/client-config.html for client "${state.clientName}" (${slug})
--- Generated: ${manifest.generatedAt}
--- Run this against the client's own provisioned database (see provision-client.ts,
--- deployment plan §3.1) AFTER inserting the tenant row and getting its id.
---
--- INSERT INTO tenant_erp_settings (tenant_id, goods_handling, billing_modes)
--- VALUES ('<tenant-id-here>', '${state.goodsHandling}', '${billingArrayLiteral}');
-`;
-    await writeTextFile(`clients/${slug}/seed.sql`, seedSql);
-
-    statusEl.textContent = `Wrote clients/${slug}/manifest.json and seed.sql`;
-    statusEl.className = 'status ok';
-  } catch (err) {
-    statusEl.textContent = 'Write failed: ' + err.message;
-    statusEl.className = 'status err';
-  }
 }
 </script>
 </body>
