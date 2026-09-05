@@ -1,0 +1,122 @@
+{
+  "$schema": "single source of truth for the dev-page tool (dev-tools/client-config.html) and provision-client.ts. Both read this same file so the feature catalog and file/migration mapping never drift out of sync between the two tools. See docs/superpowers/specs/2026-09-03-per-client-deployment-and-ai-automation-plan.md §3.5.1 #1/#3.",
+  "core": {
+    "description": "Always included in every generated client codebase, regardless of feature selection. Shared infrastructure every feature depends on.",
+    "files": [
+      "lib/db/connection.ts",
+      "lib/db/with-tenant.ts",
+      "lib/auth/dev-tenant.ts",
+      "lib/auth/jwt.ts",
+      "app/layout.tsx",
+      "app/error.tsx",
+      "app/page.tsx",
+      "app/components/AppShell.tsx"
+    ],
+    "migrations": [
+      "0001_create_app_role.sql",
+      "0002_tenant_user_role.sql"
+    ]
+  },
+  "features": {
+    "crm.contacts": {
+      "label": "Contacts",
+      "group": "CRM",
+      "files": [
+        "lib/crm/contacts.ts",
+        "app/contacts/page.tsx",
+        "app/contacts/new/page.tsx",
+        "app/contacts/new/actions.ts",
+        "app/contacts/[id]/page.tsx"
+      ],
+      "migrations": ["0003_contact.sql"],
+      "dependsOn": []
+    },
+    "crm.pipeline": {
+      "label": "Pipeline & Deals",
+      "group": "CRM",
+      "files": [
+        "lib/crm/deals.ts",
+        "app/pipeline/page.tsx",
+        "app/pipeline/actions.ts",
+        "app/pipeline/DealCard.tsx"
+      ],
+      "migrations": ["0004_pipeline_stage.sql", "0005_deal.sql"],
+      "dependsOn": ["crm.contacts"]
+    },
+    "erp.core": {
+      "label": "ERP core (vendors, products, settings)",
+      "group": "ERP",
+      "files": [
+        "lib/erp/settings.ts",
+        "lib/erp/vendors.ts",
+        "lib/erp/products.ts",
+        "lib/erp/document-sequence.ts"
+      ],
+      "migrations": [
+        "0006_tenant_erp_settings.sql",
+        "0007_approval_state.sql",
+        "0008_vendor.sql",
+        "0009_product.sql",
+        "0010_document_sequence.sql",
+        "0011_approval_state_add_withdrawn.sql"
+      ],
+      "dependsOn": []
+    },
+    "erp.inventory": {
+      "label": "Inventory (basic stock)",
+      "group": "ERP",
+      "files": [
+        "lib/erp/locations.ts",
+        "lib/erp/stock.ts"
+      ],
+      "migrations": ["0012_location.sql", "0013_stock_move.sql"],
+      "dependsOn": ["erp.core"]
+    },
+    "erp.purchase_orders": {
+      "label": "Purchase orders",
+      "group": "ERP",
+      "files": ["lib/erp/purchase-orders.ts"],
+      "migrations": ["0014_purchase_order.sql"],
+      "dependsOn": ["erp.inventory"]
+    },
+    "erp.production": {
+      "label": "Production (BoM, routing, manufacturing orders)",
+      "group": "ERP",
+      "files": [
+        "lib/erp/bom.ts",
+        "lib/erp/work-centers.ts",
+        "lib/erp/routing.ts",
+        "lib/erp/manufacturing-orders.ts"
+      ],
+      "migrations": [
+        "0015_bill_of_materials.sql",
+        "0016_work_center.sql",
+        "0017_routing.sql",
+        "0018_manufacturing_order.sql",
+        "0019_work_order.sql"
+      ],
+      "dependsOn": ["erp.inventory"],
+      "note": "manufacturing_order (0018) references product, bill_of_materials, and location; work_order (0019) references manufacturing_order and operation (via routing, 0017) — verified via REFERENCES clauses 2026-09-05, not assumed from filenames."
+    },
+    "erp.projects_time": {
+      "label": "Projects & time tracking",
+      "group": "ERP",
+      "files": [
+        "lib/erp/projects.ts",
+        "lib/erp/tasks.ts",
+        "lib/erp/time-entries.ts"
+      ],
+      "migrations": ["0020_project.sql", "0021_task.sql", "0022_time_entry.sql"],
+      "dependsOn": ["crm.contacts"],
+      "note": "project.contact_id references the CRM contact table (design spec §8's 'contact is one record, not duplicated per module' principle), not erp.core — the actual dependency, verified against migration 0020's REFERENCES clause, not guessed."
+    },
+    "ai.tool_contract": {
+      "label": "AI tool contract (agent runtime)",
+      "group": "AI",
+      "files": ["lib/crm/tool-contract.ts"],
+      "migrations": [],
+      "dependsOn": ["crm.contacts", "crm.pipeline"],
+      "note": "Only covers the CRM tool contract that exists today (Phase 5 scaffold). An ERP tool-contract equivalent doesn't exist yet (deployment plan §4.1.1) — add its own feature entry here once built, per §3.5.1 item 3's 'explicit declaration per new feature' decision."
+    }
+  }
+}
