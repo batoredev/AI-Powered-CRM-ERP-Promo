@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import postgres from 'postgres';
-import { nextDocumentNumber } from '../document-sequence';
+import { withTenant } from '../../db/with-tenant';
+import { nextDocumentNumber, nextDocumentNumberTx } from '../document-sequence';
 
 const ownerSql = postgres(process.env.DATABASE_URL!);
 
@@ -34,5 +35,32 @@ describe('document sequence data access', () => {
     const tenantBFirst = await nextDocumentNumber(tenantB.id, 'invoice');
 
     expect(tenantBFirst).toBe(1);
+  });
+
+  it('nextDocumentNumberTx allocates a number on the caller-provided transaction, and rolls back together with it on failure', async () => {
+    const [tenant] = await ownerSql`INSERT INTO tenant (name) VALUES ('Doc Seq Test Tenant 4') RETURNING id`;
+
+    // Successful path: number is allocated and visible after commit.
+    const committedNumber = await withTenant(tenant.id, async (tx) => {
+      return nextDocumentNumberTx(tx, tenant.id, 'gapless_doc_type');
+    });
+    expect(committedNumber).toBeGreaterThan(0);
+
+    // Failure path: an error thrown after allocating the number inside
+    // the SAME transaction must roll back the allocation too (gapless
+    // guarantee) -- unlike nextDocumentNumber's own gap-tolerant design.
+    await expect(
+      withTenant(tenant.id, async (tx) => {
+        await nextDocumentNumberTx(tx, tenant.id, 'gapless_doc_type');
+        throw new Error('simulated failure after allocating number');
+      }),
+    ).rejects.toThrow('simulated failure');
+
+    const nextAfterFailure = await withTenant(tenant.id, async (tx) => {
+      return nextDocumentNumberTx(tx, tenant.id, 'gapless_doc_type');
+    });
+    // If the failed allocation had NOT rolled back, this would be
+    // committedNumber + 2. Since it rolled back, it's committedNumber + 1.
+    expect(nextAfterFailure).toBe(committedNumber + 1);
   });
 });
