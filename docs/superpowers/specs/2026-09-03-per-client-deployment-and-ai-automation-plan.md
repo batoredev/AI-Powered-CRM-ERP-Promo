@@ -1,11 +1,17 @@
 # Plan: Per-Client Deployment Architecture + AI-Automation Roadmap
 
-**Date:** 2026-09-03 (revised 2026-09-05)
-**Status:** Ready for final user sign-off. **Nothing in this plan has been
-implemented.** §5's open decisions are now resolved (below) and §3.5 (the
-dev-page tool) is written in. Per the user's explicit sequencing (research →
-plan → implement), execution begins only after this document is explicitly
-approved.
+**Date:** 2026-09-03 (revised 2026-09-05, corrected again 2026-09-05 same day
+— see §0.1)
+**Status:** Core deployment model corrected 2026-09-05 (§0.1) — the dev-page
+tool is now understood to be a generator/updater, not a config-selector on a
+shared deployment. §5's four open decisions remain resolved. §3.5.1 raises 5
+new open questions, several of which (especially #1, the per-feature file
+manifest) block real implementation of the corrected tool. The two artifacts
+already built (`dev-tools/client-config.html`, `tools/provision-client.ts`)
+reflect the SUPERSEDED model and are being rewritten to match this correction
+— tracked in `EXECUTION_PLAN.md`. Per the user's explicit sequencing
+(research → plan → implement), no further implementation proceeds on an
+unreconciled understanding — this doc is the reconciled one.
 **Author:** Originally Claude session `ai-crm-erp-33`/`ai-crm-erp-74`
 (research + initial plan), handed off 2026-09-04 to session `ai-crm-erp-be`
 (now sole owner of this plan and its implementation, per the user's explicit
@@ -20,14 +26,18 @@ the up-to-date ownership and sequencing record.
 
 ## 0. What this plan does and does not change
 
-**Confirmed architecture (resolved with the user across two sessions on
-2026-09-03, after research contradicted the initial "forked repo per client"
-framing):**
+**SUPERSEDED BY A CORRECTION 2026-09-05 (see §0.1 immediately below).** The
+"Confirmed architecture" block that follows was accurate as of 2026-09-03 and
+is kept for the historical record, but the user corrected it on 2026-09-05 —
+**"features selected per client at build/deploy time, not by forking code"
+is no longer the model.** Read §0.1 first; it is the current authority.
 
-- **One shared codebase** (this repo). Not forked per client.
-- **One deployment per client** — own database, own server process, full data
-  isolation.
-- **Features selected per client at build/deploy time**, not by forking code.
+**Confirmed architecture as of 2026-09-03 (superseded — see §0.1):**
+
+- ~~One shared codebase (this repo). Not forked per client.~~
+- ~~One deployment per client — own database, own server process, full data
+  isolation.~~
+- ~~Features selected per client at build/deploy time, not by forking code.~~
 - **Existing Row-Level Security (`tenant_id`, 14 `CREATE POLICY` statements,
   `withTenant` helper, `rls-policy-audit.test.ts`) is kept, not stripped.** Each
   client's database will only ever contain one tenant row, so RLS is inert but
@@ -35,12 +45,106 @@ framing):**
   independent safety net against a bug in application-level tenant scoping. This
   was explicitly evaluated against "strip RLS since single-tenant DBs don't need
   it" and rejected — see research doc §"Security/compliance" for the reasoning.
+  **This one point survives the 2026-09-05 correction unchanged** — RLS is kept
+  in generated client codebases too, for the same reason.
 
 **Not affected by this plan:** the peer session's Phase 3A-3 production-module
 work (`bill_of_materials`, `bom_component`, and upcoming work
 centers/routing/manufacturing-order tables) is schema-domain work that proceeds
 unchanged — it's built on the existing RLS pattern, which this plan keeps. No
 rework needed there.
+
+### 0.1 CORRECTION 2026-09-05 — this is the current model, read this first
+
+The 2026-09-03 model above ("one shared deployment, a manifest row gates
+features at runtime") was **wrong** — it does not match what the user actually
+wants. The corrected model, exactly as the user specified:
+
+**What it is:** a local, offline, feature-catalog-driven project **generator
+and updater** — not a runtime config switch on a shared deployment.
+
+**Phase 1 — building a new client's software:**
+1. Features are presented as a menu/checkbox list (CRM modules, ERP modules,
+   AI automations, channels, etc.) — a **fixed catalog**, not open-ended.
+2. The client (or the developer, on their behalf) selects which features that
+   client gets.
+3. The dev-page tool assembles a **complete, real, standalone codebase — both
+   frontend and backend, every file** — by pulling in the already-written
+   source for each selected feature from the shared repo.
+4. Anything **not** selected is excluded from the output entirely. The
+   delivered project contains only what was chosen — no dead code, no unused
+   modules sitting inert behind a flag.
+5. The underlying implementation of each feature is written **once**, in the
+   shared repo. The tool performs **selective assembly** of a subset per
+   client from that shared source. It does **not** invent new code per client
+   and is **not** templating or LLM-generating new implementations per
+   feature combination.
+
+**Phase 2 — updating an existing client's software later:**
+6. The same tool is used again whenever a client requests a change, at any
+   point after initial delivery.
+7. It's pointed at that client's existing generated project (their
+   folder/repo).
+8. Updates are **menu-driven only** — a feature is toggled on or off from the
+   same fixed catalog used at initial build, and the tool adds/removes the
+   corresponding files in that client's real, existing codebase to match.
+9. This is explicitly **not** open-ended custom code editing through this
+   tool — no "change this button's color," no bespoke one-off logic requests.
+   Scope is bounded to the fixed feature catalog, both at build time and at
+   update time. This is what keeps the tool well-defined: it always knows
+   exactly what "feature X" means in code.
+
+**Hosting and data — client-owned, not centrally shared, once past the trial:**
+- **Right now, during the trial/dev phase:** one shared Neon/Supabase project
+  is fine, for internal testing only.
+- **For real clients, going forward:** each client gets their own **separate**
+  infrastructure — their own VPS and/or their own Supabase/Neon account. §2.1's
+  "each client owns their own Supabase project" decision (2026-09-05, made
+  earlier the same day as this correction) is **consistent with and required
+  by** this corrected model — it was already heading this direction before the
+  user made it explicit here.
+- **We do not host or centrally store any client's data long-term in one
+  shared project/database.** A design where we ourselves keep every client's
+  data in one DB as the delivery model is explicitly rejected for the
+  post-trial, real-client phase.
+
+**What this replaces:** the 2026-09-03 model's "one shared deployment reads a
+per-client config/manifest flag at runtime" is **incorrect** for the real
+client-delivery phase. It is replaced by: each client gets a **separately
+generated, separately hosted, standalone codebase**, built and later updated
+by the dev-page tool from one shared source of truth.
+
+**Reconciling this against §1's research (the user explicitly asked this be
+addressed, not silently contradicted):** §1 found that no credible operator
+maintains genuinely *forked* per-client codebases, because a fork means a
+security fix must be manually reapplied in N places forever. This correction
+is **deliberately closer to per-client generation than that research
+recommended** — but it is not the same failure mode §1 warns against, for one
+load-bearing reason: **a client's codebase here is never independently
+hand-edited or forked from shared source — it is mechanically regenerated
+from a fixed, small catalog of shared-repo features, by one tool, every time.**
+A security fix lands once in the shared repo; the next time the dev-page tool
+runs an update pass for a client (Phase 2, item 6-9 above), that client's
+generated output picks up the fix automatically, the same way a template
+re-render would. This is closer to "one artifact, compiled many ways" than to
+"one artifact, manually forked N times" — but it is a **real, open
+architectural tension** the user should be aware of, not a settled non-issue:
+- The propagation is only as good as the discipline of re-running the tool
+  for every client after every shared-repo change. §1's research found
+  *automatic* propagation (a redeploy) was what made the shared-deployment
+  model safe; this model's propagation is update-triggered per client, not
+  automatic — an unpatched client is possible if nobody re-runs the tool for
+  them.
+- A client's generated codebase, once delivered, is a real standalone
+  artifact on their own infrastructure — nothing stops them (or an operator
+  under time pressure) from hand-editing it directly, at which point it
+  silently becomes exactly the forked-codebase failure mode §1 warns against.
+  This plan does not yet specify any guardrail against that (e.g. a checksum/
+  provenance marker the tool could check before an update-pass, to warn if
+  the client's codebase has drifted from a clean tool-generated state).
+
+These two points are **flagged as open questions for the user**, not resolved
+here — see §3.5.1's "Open questions this correction raises" for the full list.
 
 ---
 
@@ -66,17 +170,27 @@ deploy pipeline, propagated to every client's instance automatically.
 
 ### 2.1 Deployment topology
 
-**Revised 2026-09-05 — database ownership moved to the client.** The original
-design (below, kept for the record) had us provisioning a Neon project per
-client, under our own account. That hit a real wall: the working Neon account
-has a **Projects Limit: 0** on its current plan, unable to create a second
-project at all. Rather than treat that as a plan-doc-only workaround, the user
-made a deliberate ownership decision (2026-09-05, via brainstorming):
-**each client creates and owns their own Supabase project — their account,
-their billing, their credentials.** They hand us a connection string / a
-service-role key; we never touch their Supabase billing relationship.
+**SUPERSEDED 2026-09-05 by §0.1's correction.** The topology below (one
+shared Worker fleet reading a per-client manifest row at runtime) described
+the WRONG model. Kept for the historical record only — **§2.1.1 is the
+current model.**
+
+**Revised 2026-09-05 — database ownership moved to the client (this part
+survives the §0.1 correction unchanged, see below).** The original design
+(below, kept for the record) had us provisioning a Neon project per client,
+under our own account. That hit a real wall: the working Neon account has a
+**Projects Limit: 0** on its current plan, unable to create a second project
+at all. Rather than treat that as a plan-doc-only workaround, the user made a
+deliberate ownership decision (2026-09-05, via brainstorming): **each client
+creates and owns their own Supabase project — their account, their billing,
+their credentials.** They hand us a connection string / a service-role key;
+we never touch their Supabase billing relationship.
 
 ```
+SUPERSEDED — this described one shared Worker fleet reading a per-client
+manifest row at runtime. See §2.1.1 for the current model (a separately
+generated, separately hosted, standalone codebase per client).
+
                      +-------------------------------+
                      |   Golden codebase (this repo)  |
                      |   -- single source of truth    |
@@ -120,6 +234,59 @@ service-role key; we never touch their Supabase billing relationship.
   keeps the codebase genuinely shared and updatable, and avoids the worst failure
   mode found in research (per-client schema drift).
 
+### 2.1.1 Current model (2026-09-05 correction) — generated, standalone, client-hosted
+
+Per §0.1: each client's deliverable is a **separately generated, separately
+hosted, standalone codebase** — not a shared deployment gated by a runtime
+manifest flag. The revised topology:
+
+```
+                     +-------------------------------+
+                     |   Golden codebase (this repo)  |
+                     |   -- single source of truth,   |
+                     |   organized as a feature catalog|
+                     +----------------+----------------+
+                                      |
+                     dev-page tool (§3.5, offline, local):
+                     developer/client picks features from
+                     the fixed catalog -> tool ASSEMBLES a
+                     complete standalone codebase, excluding
+                     every unselected feature's files entirely
+                                      |
+        +-----------------+----------+----------+-----------------+
+        v                 v                     v                 v
+  +-----------+     +-----------+         +-----------+     +-----------+
+  | Client A  |     | Client B  |   ...   | Client N  |     |  (new)    |
+  | generated |     | generated |         | generated |     | generate  |
+  | codebase  |     | codebase  |         | codebase  |     | on demand |
+  | own infra |     | own infra |         | own infra |     |           |
+  | (VPS/     |     | (VPS/     |         | (VPS/     |     |           |
+  |  Supabase)|     |  Supabase)|         |  Supabase)|     |           |
+  +-----------+     +-----------+         +-----------+     +-----------+
+```
+
+- **Compute:** each client's own infrastructure — a VPS and/or their own
+  Cloudflare/hosting account, not a Worker on our shared account. Exact
+  hosting mechanics per client are an implementation detail to work out; the
+  binding constraint is that it's the client's own infra, not ours, once past
+  the trial phase (see §0.1).
+- **Database:** each client's own Supabase (or Neon) project — unchanged from
+  the 2026-09-05 database-ownership decision above; that decision already
+  anticipated this direction.
+- **Trial/dev phase exception:** one shared Neon/Supabase project is fine for
+  our own internal testing right now — this is explicitly not the model for
+  real clients (§0.1).
+- **Schema:** a generated client's codebase only contains the migrations for
+  the features it was assembled with — NOT every migration unconditionally,
+  unlike the superseded model above. This is a real open question the tool's
+  design must answer (see §3.5.1) — most tables so far don't have per-feature
+  migration boundaries drawn yet.
+- **No runtime feature manifest.** §2.3's manifest concept (a DB row gating
+  features at runtime) is **not part of this model** — feature selection
+  happens once, at generation/update time, not on every request. §2.3 below
+  is retained only for its "which modules exist" catalog content, not its
+  runtime-enforcement mechanism.
+
 #### 2.1.1 What does and doesn't change with this switch
 
 - **Unaffected:** all existing schema, `FORCE ROW LEVEL SECURITY` +
@@ -158,14 +325,24 @@ stays within these limits through the roadmap below; §6 names re-evaluating the
 platform (or negotiating an Enterprise plan) as an explicit trigger once the
 client count approaches ~80-100, well before either limit is hit.
 
-### 2.3 Per-client feature manifest
+### 2.3 Feature catalog (was "per-client feature manifest" — re-scoped 2026-09-05)
 
-Each client's database carries one config row (extending the existing
-`tenant_erp_settings` pattern from migration `0006` to cover the whole app, not
-just ERP settings) declaring which modules/features are active:
+**Re-scoped by the §0.1 correction.** The content below (which
+modules/features exist) is still accurate and still useful — it's the
+catalog the dev-page tool's menu (§3.5) presents. What's **no longer true**:
+this is not a runtime-enforced manifest gating a shared deployment. There is
+no shared deployment to gate. Feature selection happens once, when the
+dev-page tool assembles or updates a client's codebase — a client's generated
+output simply does not contain the files for features they didn't select, so
+there's nothing to gate at runtime.
+
+The catalog shape (conceptual — see §3.5.1 for the real open question of how
+this maps to actual file lists):
 
 ```jsonc
-// conceptual shape -- actual implementation is a DB table, not a JSON file
+// conceptual catalog shape -- NOT a runtime-read config row anymore.
+// This is the menu the dev-page tool presents and the selection it records
+// for a given client, at generation/update time only.
 {
   "modules": {
     "crm": { "contacts": true, "pipeline": true, "deals": true },
@@ -178,27 +355,32 @@ just ERP settings) declaring which modules/features are active:
 }
 ```
 
-**Enforced at three layers**, all reading the same manifest — this triple-check
-is deliberate, not redundant, because each layer protects against a different
-failure:
+**The three-layer enforcement idea below is SUPERSEDED — there is no runtime
+enforcement in the corrected model, because there is no shared runtime to
+enforce against:**
 
-1. **Route/UI layer** — a disabled module's routes 404 and its nav items don't
-   render. This is also explicitly the mechanism the project's own design doc
-   §1a already committed to as a *complexity control*: "a tenant's UI only ever
-   shows installed/active plugins."
-2. **API/data-access layer** — server actions and API handlers check the
-   manifest before executing, independent of whether the UI correctly hid the
-   button (defense against a client hitting a disabled endpoint directly).
-3. **AI tool-contract layer** — the agent's available tools
-   (`CRM_TOOL_DEFINITIONS`-equivalent, extended across CRM+ERP) are filtered per
-   client. If `production` is off, the agent cannot see or call BOM/manufacturing
-   tools at all — not just "the UI hides the button." This is a safety property,
-   not just a UX one: an agent should never have a capability the client never
-   enabled.
+~~1. Route/UI layer — a disabled module's routes 404 and its nav items don't
+   render.~~ **Superseded:** in the corrected model, a disabled module's
+   routes/nav files are simply never present in the generated codebase — not
+   present-but-blocked, actually absent. Stronger guarantee, not a weaker one.
+~~2. API/data-access layer — server actions and API handlers check the
+   manifest before executing.~~ **Superseded:** same reasoning — the
+   server actions and API handlers for a disabled module aren't in the
+   generated codebase to be hit.
+~~3. AI tool-contract layer — the agent's available tools are filtered per
+   client.~~ **Not fully superseded — still needed, in a different form.**
+   The AI tool-contract (`lib/crm/tool-contract.ts`-equivalent) is *code*, so
+   for a given client it will only ever be built with the tool definitions
+   for features that client has — same "absent, not hidden" guarantee as
+   routes/API above. But this only holds if the tool-contract file itself is
+   correctly excluded/included per the feature catalog when the codebase is
+   assembled — this is a real design requirement for the dev-page tool's file
+   manifest (§3.5.1), not automatic.
 
-Changing a client's feature set later is a manifest update + redeploy of that one
-client's Worker — not a rebuild, since the code for every module already exists
-in the shared codebase.
+Changing a client's feature set later means re-running the dev-page tool in
+update mode (§0.1 Phase 2) against that client's existing codebase — it adds
+or removes the relevant files and the client redeploys, rather than a
+manifest-row update + redeploy of a shared Worker.
 
 ---
 
@@ -208,31 +390,62 @@ Per this project's own WAT rules (`.claude/rules/wat.md` §1, §7): this is
 mechanical, repeatable work and belongs in `tools/`, not reasoned through by hand
 per client.
 
-### 3.1 `tools/provision-client.ts` (new)
+### 3.1 `tools/provision-client.ts` — SCOPE NARROWED 2026-09-05 by §0.1's correction
 
-**Revised 2026-09-05 per §2.1's database-ownership change.** Idempotent
-script, re-runnable safely. Given a client name, a **client-supplied Supabase
-connection string** (obtained out-of-band — the client creates their own
-Supabase project and hands this to us; the exact hand-off channel is an
-implementation detail, not specified here), and a feature-manifest selection:
+**What this tool still does, unchanged:** given a client's connection string
+(client-owned Supabase, per the 2026-09-05 database-ownership decision —
+independent of and compatible with the §0.1 correction) and the client's
+feature selection, run the migrations that selection needs and set up RLS.
+This part of the tool is real, already built (see §3.1.1 note below), and
+still correct.
 
-1. **Does not create a database.** Connects to the client-supplied Supabase
-   connection string directly — the client already created and owns that
-   project.
-2. Run the full migration set against it (all 15+ migrations, unchanged — RLS
-   included, per §2.1.1 confirming the existing RLS approach carries over
-   unchanged onto Supabase's Postgres).
-3. Insert the client's feature-manifest row.
-4. Create a Cloudflare Worker for the client (or a route within the existing
-   Worker + custom domain, depending on the §2.2 ceiling — evaluate both options
-   during implementation and pick based on the actual Cloudflare Workers-for-
-   Platforms pricing quote). Unaffected by the database change.
-5. Attach the client's domain, verify SSL issuance.
-6. Write the client's connection secrets to the deploy environment (never into
-   source control — per `.claude/rules/security.md`, "never hardcode secrets").
-   The client-supplied connection string is a secret from the moment we
-   receive it — same handling rule applies.
-7. Record the client in a central fleet registry (see 3.3).
+**What changes:** this script is no longer the FULL provisioning pipeline —
+it's one step the dev-page tool's generation/update flow (§3.5) calls or
+wraps. The steps below that assumed a shared-Worker deployment model are
+superseded; kept struck through for the historical record, with the current
+answer noted:
+
+1. Does not create a database — unchanged, still correct.
+2. Run the (feature-scoped, not full-15+) migration set against it, RLS
+   included — **narrowed**: per §2.1.1, a generated client's codebase (and
+   therefore its database) should only need the migrations for the features
+   it was assembled with, not every migration unconditionally. This tool's
+   current implementation still runs the *full* migration set regardless of
+   feature selection — that's a real gap the §3.5.1 open questions call out;
+   not yet fixed.
+3. Insert the client's feature-manifest row — **superseded as "runtime
+   manifest," kept as record-keeping**: per §2.3's re-scoping, there's no
+   runtime enforcement reading this row anymore, but recording which features
+   a client's generated codebase was assembled with is still useful metadata
+   (e.g. for the update flow in §3.5 Phase 2 to know the client's current
+   state) — not dropped, just re-purposed.
+4. ~~Create a Cloudflare Worker for the client~~ — **superseded.** Per
+   §2.1.1, each client hosts on their own infra (VPS and/or their own
+   Cloudflare/hosting account), not a Worker on our shared account. This step
+   does not apply in the corrected model.
+5. ~~Attach the client's domain, verify SSL issuance~~ — **superseded** for
+   the same reason; this becomes the client's own responsibility (or a
+   separate, later-designed piece of tooling if we choose to help with it),
+   not a step this shared-account script performs.
+6. Write the client's connection secrets to the deploy environment (never
+   into source control) — unchanged, still applies regardless of hosting
+   model.
+7. ~~Record the client in a central fleet registry~~ — **open question,
+   not superseded outright.** A fleet registry across client-owned,
+   separately-hosted infrastructure is a different (and less automatic) thing
+   than one across our own Worker fleet — see §3.5.1's open questions.
+
+#### 3.1.1 Current implementation status
+
+`tools/provision-client.ts` exists (built 2026-09-04, before this correction)
+and correctly implements items 1, 2 (unscoped — runs all migrations, not
+feature-scoped), part of 3 (writes the manifest row, framed as a runtime
+gate rather than assembly metadata), and 6. It needs updating once the
+dev-page tool's file-manifest design (§3.5.1) exists, to: (a) run only the
+migrations the client's selected features need, and (b) be callable by the
+dev-page tool's generation flow rather than standing alone as "the whole
+provisioning pipeline." Not yet done — tracked as follow-up work, not
+redone in this revision.
 
 ### 3.2 `tools/deploy-update.ts` (new)
 
@@ -256,17 +469,31 @@ last successful health check. This is the tool that prevents the "invisible
 version drift until it's an incident" failure mode the research flagged as the
 single most common real-world failure at this pattern's scale.
 
-### 3.5 The developer configuration tool (offline, local-only — never shipped)
+### 3.5 The dev-page tool — CORRECTED 2026-09-05: a generator and updater, not a config-selector
 
-**Non-negotiable constraint, per the user's explicit instruction (2026-09-04):**
-this tool is visible only to the developer, on their own machine, and is never
-part of any production build a client can reach. Nothing about its existence,
-its code, or its UI ships to `main`'s deployed output. It is not a hosted page
-gated by auth — it does not run on any server at all.
+**This entire section describes the WRONG tool as of the previous revision.**
+The tool built 2026-09-04 (`dev-tools/client-config.html`) generates a
+manifest config file — that matched the superseded §2.1/§2.3 model, not the
+corrected §0.1 model. This section is rewritten to describe the tool §0.1
+actually specifies. The already-built file needs rewriting to match (tracked
+as follow-up implementation work, not done as part of this doc-only pass —
+see `EXECUTION_PLAN.md`).
 
-**Mechanism — File System Access API, following the user's own working
-reference implementation** (`dev.html`, a sibling project; independently
-verified against the live file 2026-09-05, not just summarized):
+**Non-negotiable constraint, unchanged from the prior revision (per the
+user's explicit instruction, 2026-09-04):** this tool is visible only to the
+developer, on their own machine, and is never part of any production build a
+client can reach. Nothing about its existence, its code, or its UI ships
+anywhere. It is not a hosted page gated by auth — it does not run on any
+server at all.
+
+**What it actually is, per §0.1:** a local, offline, feature-catalog-driven
+project **generator and updater**. Not a config-selector for a shared
+deployment — there is no shared deployment. It produces (Phase 1) or updates
+(Phase 2) a **complete, standalone, per-client codebase**.
+
+**Mechanism — File System Access API, unchanged, following the user's own
+working reference implementation** (`dev.html`, a sibling project;
+independently verified against the live file 2026-09-05):
 
 - `window.showDirectoryPicker({ mode: 'readwrite', id: '<project-id>' })`
   grants the page direct read/write access to a folder on the developer's
@@ -275,30 +502,49 @@ verified against the live file 2026-09-05, not just summarized):
   → `fileHandle.createWritable()` → `writable.write(content)` →
   `writable.close()`. Nested paths walk `getDirectoryHandle(part,
   { create: true })` per path segment before the final `getFileHandle` call.
-- This is a **single self-contained HTML file** — no build step, no server, no
-  framework. A developer double-clicks it (or opens it via `file://`), grants
-  folder access once, and it operates directly on the chosen folder from then
-  on. Chrome/Edge only (File System Access API is not implemented in Firefox
-  or Safari as of this writing) — acceptable since this is a developer-only
-  tool, not client-facing.
+- **New requirement this corrected model adds, not present in the prior
+  design:** the tool must be able to **copy whole files** (not just write
+  generated text) from this repo's source tree into the target folder — e.g.
+  reading `lib/erp/bom.ts`'s contents and writing an identical copy into the
+  client's output folder — and, for Phase 2 updates, **delete** files in the
+  target folder that correspond to a feature just turned off. The File System
+  Access API supports both (`FileSystemDirectoryHandle.removeEntry()` for
+  deletion; read via `getFile()` + write via the existing `writeTextFile`
+  pattern for copying) — this is a real, buildable capability, not a gap in
+  the API, but it is new surface area the prior tool didn't need.
+- Still a **single self-contained HTML file** — no build step, no server, no
+  framework. Chrome/Edge only, acceptable for a developer-only tool.
 
-**What it is for:** the developer picks a client's feature-manifest selection
-(the §2.3 shape — which CRM/ERP/AI/channel modules are active) in this local
-tool, and the tool generates or regenerates that client's deployment
-configuration on disk — the manifest seed data, environment variable
-templates, and any per-client config files `provision-client.ts` (§3.1) needs
-as input. **Only that generated output is ever pushed to the client's own
-GitHub repo or deploy pipeline — the dev-page tool itself is never committed,
-built, or deployed anywhere.** This mirrors `dev.html`'s own
-`generateBundle()` → `writeIndexHTML()` pattern: pick/edit config in the local
-tool, regenerate the output files on disk immediately on every change, and the
-regenerated *files* — not the tool — are what leaves the developer's machine.
+**What it does, Phase 1 (new client):**
+1. Presents the fixed feature catalog (§2.3's shape) as a menu.
+2. Developer/client selects features.
+3. Tool walks the shared repo's source tree, and for each selected feature,
+   copies that feature's files (frontend + backend + its migrations) into a
+   fresh output folder. Files belonging only to unselected features are never
+   copied.
+4. Writes a manifest recording which features this client's codebase was
+   assembled with (§2.3, re-purposed as assembly metadata, not a runtime
+   gate) into the output folder, alongside the copied code.
+5. `provision-client.ts` (§3.1) is then run against that output — but scoped
+   to only the migrations the selected features need, once §3.1.1's gap is
+   fixed (not yet done).
 
-**Where this fits relative to `provision-client.ts` (§3.1):** the dev-page
-tool is the human-facing config-selection step; `provision-client.ts` is the
-scripted step that actually provisions infrastructure from the resulting
-manifest. The dev-page tool's output feeds `provision-client.ts` as input —
-it does not replace it.
+**What it does, Phase 2 (update an existing client):**
+6. Developer points the tool at the client's *existing* output folder
+   (`showDirectoryPicker` on that folder, not a fresh one).
+7. Tool reads that folder's recorded manifest (from step 4, above) to know
+   the client's current feature selection.
+8. Presents the same fixed catalog, pre-checked to match the current
+   selection.
+9. On a toggle, the tool copies in the newly-selected feature's files, or
+   removes the newly-deselected feature's files, and rewrites the manifest to
+   match. Bounded to catalog features only — no open-ended file editing.
+
+**Where this fits relative to `provision-client.ts` (§3.1):** unchanged in
+spirit — the dev-page tool is the human-facing, file-assembling step;
+`provision-client.ts` is the scripted step that sets up the resulting
+codebase's database. The dev-page tool's output (a real codebase) is what
+`provision-client.ts` is then run against.
 
 **One naming note, corrected from an earlier informal comparison:** `dev.html`
 also has an `FF_GROUPS`-driven feature-flag panel (`ffLoad`/`ffSave`/
@@ -306,9 +552,53 @@ also has an `FF_GROUPS`-driven feature-flag panel (`ffLoad`/`ffSave`/
 toggles *that app's own UI sections* for its own single deployment — it is
 not a per-client selector. It is structurally similar to what this tool needs
 (a grouped list of `{key, label, sub}` toggles) and worth reusing as a UI
-pattern, but it solves a different problem than the per-client manifest
-selection described above; the two should not be conflated when building
-this tool.
+pattern, but it solves a different problem than the per-client generation
+described above; the two should not be conflated when building this tool.
+
+### 3.5.1 Open questions this correction raises — flagged for the user, not resolved here
+
+Per the user's explicit request to surface these rather than silently
+assume an answer:
+
+1. **How does the tool know which files belong to which feature?** Today,
+   the codebase has no per-feature file manifest — `lib/erp/bom.ts`,
+   `lib/erp/work-centers.ts`, etc. map roughly one-to-one to ERP
+   sub-features by convention, but nothing declares this in a machine-
+   readable way, and some files (e.g. `lib/db/with-tenant.ts`,
+   `lib/auth/dev-tenant.ts`) are shared infrastructure every client's
+   codebase needs regardless of feature selection. This mapping needs to be
+   built and maintained — likely a small JSON/TS manifest listing, per
+   catalog feature, the files/migrations it needs, plus a separate
+   "always included" core-infrastructure list. Not designed yet.
+2. **How does the tool detect a client's "current state" before an
+   update?** §3.5 Phase 2 assumes the tool's own previously-written manifest
+   file in the client's output folder is trustworthy. What if a client (or
+   an operator) hand-edited that folder directly since the last generation?
+   The tool has no way to detect drift from a clean generated state right
+   now — this is the same gap named in §0.1's reconciliation with §1's
+   research. A future revision could add a checksum or provenance marker per
+   generated file, checked before an update pass, but this is not designed
+   or built.
+3. **Do per-feature file manifests need to be maintained alongside each
+   feature's code, or can they be inferred?** Related to (1) — if a new ERP
+   sub-feature is added later, does its own migration/file list get declared
+   explicitly at that time (extra discipline required per new feature), or
+   can the tool infer file-to-feature mapping some other way (e.g. directory
+   convention)? Explicit declaration is safer but adds a step to every future
+   feature's own implementation plan; inference is more fragile. Not decided.
+4. **What happens to `provision-client.ts`'s "runs all 22 migrations
+   unconditionally" behavior?** Per §3.1's narrowed scope, it should run only
+   the migrations a client's selected features need — but migrations have
+   real ordering dependencies (e.g. `0006_tenant_erp_settings.sql` before
+   anything reading `tenant_erp_settings`) that don't necessarily align with
+   feature boundaries one-to-one. This needs its own design pass once (1)'s
+   file-manifest exists to reason about.
+5. **Is there a target hosting story for the client-owned VPS path**
+   (§0.1's "each client gets their own VPS and/or their own Supabase/Neon
+   account")? The Supabase side is designed (§2.1's connection-string model);
+   the VPS/compute side is explicitly a "forward-looking, not designed yet"
+   note in §2.1. If a real client needs delivery before that's designed, this
+   is the actual blocker, not the dev-page tool itself.
 
 **Status:** design-only as of this revision. Not yet implemented — build
 begins once this document is signed off (§5, §7).
@@ -476,34 +766,54 @@ reasoning each answer implies for downstream design:
 
 ## 6. Trigger points to revisit this plan
 
-- **Client count approaching ~80-100** — re-evaluate the Cloudflare Workers
-  ceiling (§2.2) before it becomes a blocker, not after.
-- **Any client needs genuinely different code**, not just different
-  config/manifest selection — per the research, this is the one case where the
-  Vercel "Multi-Project" (per-client-repo) model actually becomes the right
-  answer for *that specific client*, without changing the model for everyone
-  else.
+- ~~**Client count approaching ~80-100** — re-evaluate the Cloudflare Workers
+  ceiling (§2.2).~~ **Superseded by §0.1/§2.1.1** — there is no shared Worker
+  fleet in the corrected model, so this ceiling doesn't apply the way §2.2
+  originally framed it. §2.2 is retained for the historical record only.
+- ~~**Any client needs genuinely different code**, not just different
+  config/manifest selection~~ — **superseded**: the corrected model (§0.1) is
+  already per-client-generated code by design, not a shared deployment with a
+  config escape hatch. This trigger point no longer makes sense in the
+  corrected model — genuinely custom code for one client is still explicitly
+  out of scope (§0.1 item 9), but the "when does it become worth a real fork"
+  question this bullet was gesturing at needs re-thinking from scratch, not
+  answered by this revision.
 - **First automated workflow (§4.3) completes shadow-mode evaluation** — informs
   whether the graduated-autonomy mechanism (§4.1.2) is working as designed before
-  broadening to more workflows.
+  broadening to more workflows. **Unaffected by the §0.1 correction.**
+- **New trigger, added 2026-09-05:** any of §3.5.1's 5 open questions being
+  answered by the user should trigger revisiting the relevant part of §3/§3.5
+  — several of them are load-bearing for actually building the tool.
 
 ---
 
 ## 7. What happens next
 
-This document is the plan-for-review artifact per the user's confirmed
-sequencing. **No implementation begins until this is explicitly approved.**
-§5's four open decisions are now resolved (2026-09-05) and §3.5 (the dev-page
-tool) is written in — the remaining gap before implementation is the user's
-final sign-off on this revised document. Once approved, next steps in order:
+**Revised 2026-09-05 per §0.1's correction.** §5's four open decisions are
+resolved. §3.5 (the dev-page tool) has been rewritten to describe the
+correct generator/updater model, but the file already built
+(`dev-tools/client-config.html`, and `tools/provision-client.ts`'s current
+scope) still reflects the superseded config-selector model and needs
+rewriting to match — tracked in `EXECUTION_PLAN.md` as active follow-up work,
+not done as part of this doc-only revision. §3.5.1's 5 open questions are
+genuinely open and several block real implementation (especially #1, the
+per-feature file manifest). Next steps in order:
 
-1. Build the offline dev-page tool (§3.5).
-2. Spin up `tools/provision-client.ts` against a single test client (proves the
-   provisioning pipeline before any real client depends on it).
-3. Extend the tool-contract pattern (§4.2) with ERP tools, targeting MCP spec
+1. Resolve enough of §3.5.1's open questions (especially #1: how files map
+   to catalog features) to make the file-assembly logic buildable.
+2. Rewrite `dev-tools/client-config.html` to perform Phase 1/Phase 2
+   generation and update (§3.5), not manifest-file writing.
+3. Rewrite `tools/provision-client.ts` to (a) accept a generated codebase's
+   feature selection and run only the migrations it needs, and (b) be
+   callable as a step within the dev-page tool's flow rather than a
+   standalone full pipeline.
+4. Generate a single test client's codebase end-to-end (Phase 1) to prove the
+   assembly logic before any real client depends on it.
+5. Extend the tool-contract pattern (§4.2) with ERP tools, targeting MCP spec
    `2026-07-28`.
-4. Build the first automated workflow (§4.3) in shadow mode against the test
+6. Build the first automated workflow (§4.3) in shadow mode against the test
    client's data.
-5. Only then, provision the first real paying client.
+7. Only then, provision the first real paying client — onto their own
+   infrastructure, per §0.1/§2.1.1, not our shared account.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
