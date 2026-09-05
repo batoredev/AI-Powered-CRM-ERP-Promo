@@ -96,10 +96,15 @@ describe('payment data access', () => {
     // Promise.allSettled probe passes with the row lock in place, but it
     // ALSO passed with the row lock temporarily removed during
     // verification -- i.e. this test does not reliably reproduce the
-    // race under Node's single-threaded event loop + postgres.js's
-    // connection/transaction scheduling; the two calls appear not to
-    // genuinely interleave inside Postgres the way a true concurrent-
-    // client race would. The row lock is still correct defense-in-depth
+    // race. This is NOT because of shared-connection scheduling (the
+    // pool grants each concurrent withTenant call its own physical
+    // connection via sql.begin() -- see lib/db/connection.ts's max: 10
+    // pool), but more likely ordinary async/event-loop timing: each
+    // call does two separate withTenant round trips (getPayment,
+    // getInvoice) that commit and release BEFORE the allocation
+    // transaction even opens, so the two calls' actual critical
+    // sections don't reliably line up in a single run the way a true
+    // concurrent-client race would. The row lock is still correct defense-in-depth
     // (a real race under true concurrent load -- e.g. two separate
     // processes -- remains closed by it), but this particular test
     // should not be read as empirical proof the fix is load-bearing; it
