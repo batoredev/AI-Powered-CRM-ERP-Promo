@@ -109,10 +109,16 @@ export async function recordPaymentAllocation(
     // the second concurrent caller to block until the first transaction
     // commits or rolls back, so its subsequent SUM genuinely reflects the
     // first caller's just-inserted allocation. Found by final-review
-    // adversarial reasoning during Phase 3A-5 Task 3's review — the same
-    // class of race Phase 3A-2's receivePurchaseOrder fix (commit
-    // 89a7ef1) closed for double-receive, applied here to double-
-    // allocation instead.
+    // adversarial reasoning during Phase 3A-5 Task 3's review. Note this
+    // is NOT the same mechanism Phase 3A-2's receivePurchaseOrder fix
+    // (commit 89a7ef1) used for its double-receive race -- that one used
+    // an atomic UPDATE...WHERE status=...RETURNING * guard, not a row
+    // lock. This is this codebase's first explicit FOR UPDATE (confirmed
+    // via `grep -rn "FOR UPDATE" lib/` during the final whole-branch
+    // review) -- a genuinely different tool for a genuinely different
+    // problem shape (an aggregate invariant across sibling rows, not a
+    // single-row status transition), not an application of an existing
+    // house pattern.
     await tx`SELECT 1 FROM payment WHERE id = ${paymentId} FOR UPDATE`;
 
     const existing = await tx`
