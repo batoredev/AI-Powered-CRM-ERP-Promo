@@ -8,9 +8,12 @@
       "lib/auth/dev-tenant.ts",
       "lib/auth/jwt.ts",
       "app/layout.tsx",
+      "app/tokens.css",
       "app/error.tsx",
+      "app/error.module.css",
       "app/page.tsx",
-      "app/components/AppShell.tsx"
+      "app/components/AppShell.tsx",
+      "app/shell.module.css"
     ],
     "migrations": [
       "0001_create_app_role.sql",
@@ -24,9 +27,12 @@
       "files": [
         "lib/crm/contacts.ts",
         "app/contacts/page.tsx",
+        "app/contacts/page.module.css",
         "app/contacts/new/page.tsx",
+        "app/contacts/new/page.module.css",
         "app/contacts/new/actions.ts",
-        "app/contacts/[id]/page.tsx"
+        "app/contacts/[id]/page.tsx",
+        "app/contacts/[id]/page.module.css"
       ],
       "migrations": ["0003_contact.sql"],
       "dependsOn": []
@@ -37,8 +43,10 @@
       "files": [
         "lib/crm/deals.ts",
         "app/pipeline/page.tsx",
+        "app/pipeline/page.module.css",
         "app/pipeline/actions.ts",
-        "app/pipeline/DealCard.tsx"
+        "app/pipeline/DealCard.tsx",
+        "app/pipeline/DealCard.module.css"
       ],
       "migrations": ["0004_pipeline_stage.sql", "0005_deal.sql"],
       "dependsOn": ["crm.contacts"]
