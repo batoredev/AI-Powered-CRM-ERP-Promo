@@ -118,6 +118,46 @@
       "dependsOn": ["crm.contacts", "erp.core"],
       "note": "project.contact_id references the CRM contact table (design spec §8's 'contact is one record, not duplicated per module' principle), verified against migration 0020's REFERENCES clause. erp.core dependency added 2026-09-05 after the Phase 3A-4 final-review agent caught it empirically: time_entry.approval_state (0022) uses the approval_state ENUM TYPE defined in 0007/0011, which belongs to erp.core — an enum-type dependency, not a REFERENCES clause, so the original FK-only verification method for this file was structurally blind to it. erp.purchase_orders and erp.production don't need this listed explicitly since they already transitively depend on erp.core via erp.inventory, but erp.projects_time depends only on crm.contacts, so this dependency has to be explicit or provisioning a client with effort_based billing and no ERP core fails at 0022 with 'type approval_state does not exist'."
     },
+    "erp.sales_orders": {
+      "label": "Sales orders",
+      "group": "ERP",
+      "files": ["lib/erp/sales-orders.ts"],
+      "migrations": ["0023_sales_order.sql"],
+      "dependsOn": ["crm.contacts", "erp.core"],
+      "note": "sales_order.contact_id references contact (crm.contacts); sales_order_line.product_id references product (erp.core); approval_state column uses the shared enum from erp.core (0007/0011) — verified via REFERENCES clauses and enum usage in 0023_sales_order.sql, not assumed from filenames. No app/ UI exists yet for this feature (Phase 3B ERP UI hasn't started) — files list is lib/ only, same as every other ERP feature added so far."
+    },
+    "erp.invoicing": {
+      "label": "Invoicing & payments",
+      "group": "ERP",
+      "files": ["lib/erp/invoices.ts", "lib/erp/payments.ts"],
+      "migrations": ["0024_invoice.sql", "0025_payment.sql"],
+      "dependsOn": ["erp.sales_orders"],
+      "note": "invoice.sales_order_id references sales_order (erp.sales_orders); invoice.approval_state uses the erp.core enum (transitively satisfied via erp.sales_orders -> erp.core); payment.contact_id references contact (transitively satisfied via erp.sales_orders -> crm.contacts); payment_allocation.invoice_id references invoice (same feature). invoice_source_type enum also allows 'time_entries' and 'subscription' sources per 0024's CREATE TYPE, but no code path here creates an invoice from those sources yet — deferred, not a manifest gap. Verified via REFERENCES clauses in 0024_invoice.sql/0025_payment.sql."
+    },
+    "erp.recurring_billing": {
+      "label": "Recurring templates & plans",
+      "group": "ERP",
+      "files": ["lib/erp/recurring-templates.ts", "lib/erp/plans.ts"],
+      "migrations": ["0026_recurring_template.sql", "0027_plan.sql"],
+      "dependsOn": ["erp.core"],
+      "note": "recurring_template.approval_state uses the erp.core enum (0007/0011); plan.recurring_template_id references recurring_template (same feature). Verified via REFERENCES clauses and enum usage in 0026/0027. Does NOT depend on crm.contacts or erp.sales_orders — a plan/template can exist with no subscription yet."
+    },
+    "erp.subscriptions": {
+      "label": "Subscriptions",
+      "group": "ERP",
+      "files": [
+        "lib/erp/subscriptions.ts",
+        "lib/erp/subscription-change-events.ts",
+        "lib/erp/usage-records.ts"
+      ],
+      "migrations": [
+        "0028_subscription.sql",
+        "0029_subscription_change_event.sql",
+        "0030_usage_record.sql"
+      ],
+      "dependsOn": ["crm.contacts", "erp.recurring_billing"],
+      "note": "subscription.contact_id references contact (crm.contacts); subscription.plan_id references plan (erp.recurring_billing); subscription.approval_state uses the erp.core enum (transitively satisfied via erp.recurring_billing -> erp.core); subscription_change_event.subscription_id/previous_plan_id/new_plan_id and usage_record.subscription_id both reference subscription/plan (same feature / erp.recurring_billing). Verified via REFERENCES clauses and enum usage in 0028/0029/0030 — same discipline that caught the erp.projects_time gap. No app/ UI exists yet (Phase 3B not started); lib/ files only."
+    },
     "ai.tool_contract": {
       "label": "AI tool contract (agent runtime)",
       "group": "AI",

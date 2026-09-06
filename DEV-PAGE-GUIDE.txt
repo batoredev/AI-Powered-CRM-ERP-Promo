@@ -1,0 +1,183 @@
+========================================================================
+ AI CRM-ERP — DEV PAGE TOOL: WHAT TO DO AFTER GENERATING A CLIENT
+========================================================================
+Last updated: 2026-09-06
+
+This is a plain reference for the manual steps needed after running
+dev-tools/client-config.html to generate or update a client's codebase.
+The tool itself only assembles source files — everything below (config,
+database, secrets, running the app) is still a manual process.
+
+------------------------------------------------------------------------
+IMPORTANT — BEFORE YOU START, CHECK THIS
+------------------------------------------------------------------------
+This repo has multiple people/sessions working on it and switching
+branches. dev-tools/feature-manifest.json can silently revert to an
+OLDER, BROKEN version if the branch gets switched under you.
+
+Before generating a client, confirm the manifest on disk actually
+includes these entries (as of the last known-good fix, commit cbb9e92
+on branch fix/feature-manifest-missing-css-modules — check if that
+branch has been merged to main yet, or ask whoever owns main right now):
+
+  core.files must include:
+    app/tokens.css
+    app/error.module.css
+    app/shell.module.css
+
+  crm.contacts.files must include:
+    app/contacts/page.module.css
+    app/contacts/new/page.module.css
+    app/contacts/[id]/page.module.css
+
+  crm.pipeline.files must include:
+    app/pipeline/page.module.css
+    app/pipeline/DealCard.module.css
+
+If these are missing, the generated app will fail at runtime with
+"Module not found" errors (this happened twice already — see FIXED
+ISSUES below). Either wait for the fix branch to merge, or manually
+copy the missing .css files into your generated folder as a stopgap
+(see FIXED ISSUES section for exact commands).
+
+------------------------------------------------------------------------
+STEP 1 — GENERATE THE CODEBASE
+------------------------------------------------------------------------
+1. Open dev-tools/client-config.html in Chrome or Edge.
+2. Grant folder access when asked, twice:
+     - First: this repo's root folder (AI CRM-ERP)
+     - Second: your output folder (new folder for a new client, or an
+       existing client's folder to update it)
+3. Enter the client name.
+4. Pick features from the menu. Dependencies are auto-selected.
+5. Click "Generate" (new client) or "Apply update" (existing client).
+
+This writes automatically:
+  - Feature source files (app/, lib/) for whatever was selected
+  - Scaffold files: package.json, package-lock.json, tsconfig.json,
+    next.config.ts, next-env.d.ts, .gitignore
+  - .env.local TEMPLATE (placeholders only — first generation ONLY,
+    never overwritten on update, so real secrets already filled in
+    are never destroyed)
+  - _client-manifest.json and clients/<slug>/manifest.json
+
+------------------------------------------------------------------------
+STEP 2 — CREATE A SUPABASE PROJECT FOR THE CLIENT
+------------------------------------------------------------------------
+1. Go to supabase.com -> New Project. Wait for it to finish setting up.
+2. Go to: Project Settings -> Database -> Connection string
+3. Pick the "Connection pooling" / "Transaction" tab — NOT "Direct
+   connection". The direct db.<ref>.supabase.co host may not resolve
+   (DNS failure) depending on the project/region — this happened on
+   the first real test. The pooler host always works.
+4. Copy the URI. It looks like:
+   postgresql://postgres.<project-ref>:[YOUR-PASSWORD]@aws-0-<region>.pooler.supabase.com:6543/postgres
+
+------------------------------------------------------------------------
+STEP 3 — RUN provision-client.ts (SETS UP THE DATABASE)
+------------------------------------------------------------------------
+Run this from inside the MAIN REPO folder (AI CRM-ERP), not the
+generated client folder — it looks for db/migrations/ relative to
+wherever you run the command from.
+
+  cd "C:\Users\sriva\Desktop\AI CRM-ERP"
+  npx tsx tools/provision-client.ts ^
+    --client-name "Client Name" ^
+    --connection-string "postgresql://postgres.<ref>:<real-password>@aws-0-<region>.pooler.supabase.com:6543/postgres" ^
+    --manifest "C:\path\to\generated\folder\clients\<slug>\manifest.json"
+
+(Optional: add --dry-run first to check without making real changes.)
+
+This will:
+  - Create the app_runtime database role
+  - Run ONLY the migrations the selected features need (not all of them)
+  - Insert one tenant row
+  - PRINT a generated app_runtime password ONCE — copy it immediately,
+    it is never shown again and never saved anywhere by the script
+
+SECURITY: never paste a real password into a chat/AI conversation.
+Run this command yourself in your own terminal. If a real password or
+connection string ever does end up pasted somewhere it shouldn't,
+rotate it immediately in the Supabase dashboard (Project Settings ->
+Database -> Reset database password).
+
+------------------------------------------------------------------------
+STEP 4 — FILL IN .env.local IN THE GENERATED FOLDER
+------------------------------------------------------------------------
+Open .env.local in the generated client folder and replace all 3
+placeholders with real values:
+
+  DATABASE_URL=postgresql://postgres.<ref>:<supabase-password>@aws-0-<region>.pooler.supabase.com:6543/postgres?sslmode=require
+
+  APP_RUNTIME_DATABASE_URL=postgresql://app_runtime:<password-from-step-3>@aws-0-<region>.pooler.supabase.com:6543/postgres?sslmode=require
+
+  SESSION_JWT_SECRET=<a real random secret>
+
+Generate the SESSION_JWT_SECRET in Git Bash (not PowerShell — it
+doesn't have openssl by default):
+
+  openssl rand -base64 32
+
+------------------------------------------------------------------------
+STEP 5 — INSTALL AND RUN
+------------------------------------------------------------------------
+  cd "C:\path\to\generated\folder"
+  npm install
+  npm run dev
+
+Then open http://localhost:3000 in a browser.
+
+------------------------------------------------------------------------
+FIXED ISSUES (for reference — already patched in feature-manifest.json,
+but re-list here in case an older manifest version gets used again)
+------------------------------------------------------------------------
+Issue 1: "Module not found: Can't resolve './error.module.css'"
+  Cause: 7 .module.css files existed in app/ but none were listed in
+  dev-tools/feature-manifest.json, even though the .tsx files that
+  import them WERE listed.
+  Fixed: commit be71b44 on branch fix/feature-manifest-missing-css-modules
+
+Issue 2: "Module not found: Can't resolve './tokens.css'"
+  Cause: app/layout.tsx imports app/tokens.css (global design tokens),
+  which was also missing from core.files.
+  Fixed: commit cbb9e92, same branch.
+
+STOPGAP if you hit either error and the fix branch isn't merged yet —
+copy the missing files directly into your generated folder's app/
+directory from the main repo's app/ directory, matching the exact same
+relative path (e.g. app/error.module.css -> app/error.module.css,
+app/contacts/page.module.css -> app/contacts/page.module.css, etc.).
+Full list of files that must exist in a generated client's app/
+directory when core CRM features are selected:
+  app/tokens.css
+  app/error.module.css
+  app/shell.module.css
+  app/contacts/page.module.css
+  app/contacts/new/page.module.css
+  app/contacts/[id]/page.module.css
+  app/pipeline/page.module.css
+  app/pipeline/DealCard.module.css
+
+------------------------------------------------------------------------
+OTHER THINGS WORTH KNOWING
+------------------------------------------------------------------------
+- The dev-page tool (client-config.html) is LOCAL-ONLY. It never runs
+  on a server, never gets deployed, never ships to any client. Only
+  its OUTPUT (the generated codebase) is meant to be pushed to a
+  client's own repo.
+
+- provision-client.ts does NOT create a Supabase project — the client
+  (or you, standing in for them during testing) must create it first.
+  Each client owns their own database/hosting; nothing is centrally
+  shared once past the trial/dev phase.
+
+- Re-running "Apply update" on an existing generated folder is safe —
+  it refreshes feature files and scaffold files, but NEVER touches an
+  existing .env.local, so real secrets already filled in survive.
+
+- provision-client.ts is idempotent — safe to re-run against the same
+  connection string if something goes wrong partway through.
+
+- Full architecture/reasoning behind all of this lives in:
+  docs/superpowers/specs/2026-09-03-per-client-deployment-and-ai-automation-plan.md
+  and EXECUTION_PLAN.md (in the main repo root) tracks current status.
