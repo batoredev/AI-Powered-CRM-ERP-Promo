@@ -3,8 +3,8 @@
 > **Living document.** This file is updated every time the plan changes — a phase completes, the user gives a new standing instruction, or sequencing is revised. Check the "Last updated" line below and the change log at the bottom for the current state. Read this file whenever you need to know what's done, what's next, and why.
 
 **Last updated:** 2026-09-06
-**Current phase:** Phase 3A-6 (Subscriptions) MERGED. Per explicit user instruction ("after 3a6 pause yourself"), execution is now paused — do not proceed to Phase 3B, the CRM gap-audit, the dedicated UI pass, or Phase 4 without the user explicitly resuming.
-**Current branch:** `main` (phase3a6-subscriptions merged and deleted).
+**Current phase:** Phase 3B (ERP UI) — design approved, decomposed into 7 sub-phases (3B-0 through 3B-6). Execution resumed by explicit user instruction. Next: write and execute 3B-0's implementation plan (shared scaffold).
+**Current branch:** `main`.
 
 ## Phase 3A-6 (Subscriptions: recurring_template, plan, subscription, subscription_change_event, usage_record) — MERGED 2026-09-06
 
@@ -99,7 +99,7 @@ This is the authoritative order. Items are worked top to bottom; nothing later s
 8. **`tools/provision-client.ts` — REWRITTEN 2026-09-05, commit `43a6ae8`. Done.** `--manifest` is now required, runs only the migrations a client's selected features need (verified via dry-run: 16/22 migrations for a 4-feature test manifest, correctly scoped down), dropped the superseded `tenant_erp_settings` runtime-manifest write. Type-checked clean.
    - **Supabase ownership decision (2026-09-05, still valid, unaffected by the generator/updater correction):** each client creates/owns their own Supabase project, hands us a connection string; we never own client databases. Recorded in the plan doc §2.1/§3.1 (commit `3fc7ae9`).
    - **Forward-looking note (not designed, not scheduled):** compute may move from Cloudflare Workers to a self-hosted VPS at some future point.
-10. **Phase 3B — ERP UI** — screens for everything built in Phase 3A-1 through the Subscriptions module.
+10. **Phase 3B — ERP UI** — screens for everything built in Phase 3A-1 through the Subscriptions module. Design spec approved 2026-09-06: `docs/superpowers/specs/2026-09-06-phase3b-erp-ui-design.md`. Decomposed into 7 sub-phases, in order: **3B-0** (shared scaffold: nav, gating, shared components — not started), 3B-1 (Vendors & Products), 3B-2 (Inventory & Purchase Orders), 3B-3 (Production), 3B-4 (Projects & Time), 3B-5 (Sales & Billing), 3B-6 (Subscriptions). Each gets its own plan → SDD cycle. Full CRUD per entity; soft-delete/archive uniformly (no hard delete) — see §3 above.
 11. **CRM gap-audit follow-up** — deferred by explicit user decision ("finish Phase 3 first"). From the CRM feature audit (Salesforce/HubSpot/Zoho/Pipedrive/D365/Twenty/EspoCRM/SuiteCRM/Odoo comparison), ranked by retrofit cost:
     1. Polymorphic activity/timeline model (most expensive to retrofit later — highest priority)
     2. Deal stage-history
@@ -118,7 +118,7 @@ This is the authoritative order. Items are worked top to bottom; nothing later s
 ## 3. Standing decisions (binding, don't re-litigate)
 
 - **Architecture:** shared codebase, one deployment per client, RLS kept as defense-in-depth. (Resolved a conflict between two parallel sessions; user's deciding instruction: "go with your recommended option itself, but make sure each client will have their own customised software.")
-- **GDPR vs. append-only history conflict** (design spec §7 vs §8): resolved as soft-delete/tombstone.
+- **GDPR vs. append-only history conflict** (design spec §7 vs §8): resolved as soft-delete/tombstone. **Extended to ERP in Phase 3B's design (2026-09-06):** every mutable ERP entity without its own lifecycle/status column gets an `is_active` flag and `archiveX`/`restoreX` functions, never hard delete — same pattern, no CRM/ERP split. See `docs/superpowers/specs/2026-09-06-phase3b-erp-ui-design.md` §3.
 - **CRM gaps timing:** finish all of Phase 3 (ERP) first, then CRM gaps (see §2 item 11).
 - **UI pass timing:** finish everything else, then a dedicated multi-agent UI pass, then Phase 4 (see §2 item 12).
 - **Execution ordering:** strict sequence, not parallel tracks (user instruction 2026-09-04, for easier monitoring) — the deployment/AI-automation plan and dev-page tool now occupy fixed numbered slots (§2 items 6-8) rather than running interleaved in the background. Nothing after item 5 (Phase 3A-4) starts until everything before it is done, in order.
